@@ -259,9 +259,6 @@ function drawBoard(now){
   bc.strokeStyle='rgba(255,255,255,.05)'; bc.lineWidth=1;
   for(let c=1;c<COLS;c++){bc.beginPath();bc.moveTo(OX+c*CELL,OY);bc.lineTo(OX+c*CELL,OY+ROWS*CELL);bc.stroke();}
   for(let r=1;r<ROWS;r++){bc.beginPath();bc.moveTo(OX,OY+r*CELL);bc.lineTo(OX+COLS*CELL,OY+r*CELL);bc.stroke();}
-  // track (trajectory), barely visible
-  bc.strokeStyle='rgba(127,243,255,.13)'; bc.lineWidth=CELL*.5; bc.lineJoin='round'; bc.lineCap='round';
-  bc.beginPath(); path.forEach((p,i)=> i?bc.lineTo(cx(p),cy(p)):bc.moveTo(cx(p),cy(p))); bc.closePath(); bc.stroke();
 
   // apples
   for(const [idx,a] of S.apples){
