@@ -817,7 +817,7 @@ const sfx=(()=>{
     [1,2,3,4].forEach((n,i)=>fetch(`sounds/bite${n}.mp3`).then(r=>r.arrayBuffer()).then(b=>a.decodeAudioData(b)).then(buf=>bites[i]=buf).catch(()=>{})); }
   // only bite, follow and donation sounds are used; everything else is silent
   // donations: a random meme clip, one at a time (long clips would pile up during gift streaks)
-  const DONATION=['gift-metal','gift-fart','gift-khammam','gift-walter','gift-oioi','gift-burmalda'].map(n=>`sounds/${n}.mp3`);
+  const DONATION=['gift-metal','gift-fart','gift-oioi','gift-burmalda'].map(n=>`sounds/${n}.mp3`);
   let donationPlaying=null, lastDonation=-1;
   function playDonation(){ if(donationPlaying&&!donationPlaying.ended&&!donationPlaying.paused) return;
     let k; do{ k=Math.floor(Math.random()*DONATION.length); } while(DONATION.length>1&&k===lastDonation); lastDonation=k;
