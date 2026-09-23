@@ -217,6 +217,10 @@ const lerp=(a,b,t)=>a+(b-a)*t;
 const gl=document.getElementById('gl');
 const renderer=new THREE.WebGLRenderer({canvas:gl,antialias:true,alpha:true});
 renderer.setSize(1080,1920,false); renderer.setPixelRatio(1);
+// GPU hygiene for long streams: free the WebGL context when the page is reloaded (LIVE Studio keeps old ones around
+// otherwise and textures start rendering black), and recover automatically if the context is ever lost.
+addEventListener('pagehide',()=>{ try{ renderer.dispose(); renderer.forceContextLoss(); }catch(e){} });
+gl.addEventListener('webglcontextlost',e=>{ e.preventDefault(); setTimeout(()=>location.reload(),1500); });
 renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.PCFShadowMap;
 renderer.outputColorSpace=THREE.SRGBColorSpace;
 const scene=new THREE.Scene();
