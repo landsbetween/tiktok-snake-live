@@ -64,6 +64,7 @@
   .ev .plus{margin-left:auto;font-family:Orbitron;color:var(--apple);font-size:30px;white-space:nowrap}
   .ev.bomb{border-color:rgba(255,122,26,.6);box-shadow:0 0 24px rgba(255,80,0,.25);animation:evin .35s, shake .4s}
   @keyframes shake{0%,100%{transform:none}25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
+  .ev.like{border-color:rgba(255,80,120,.4)}
   .ev.gift{border-color:rgba(255,209,102,.5);box-shadow:0 0 24px rgba(255,209,102,.15)}
   @keyframes evin{from{opacity:0;transform:translateY(20px) scale(.95)}to{opacity:1;transform:none}}
 
@@ -113,12 +114,12 @@
       <div class="row" style="font-size:22px;color:var(--muted);padding-top:10px">1 💎 = 1 🍎 · any gift</div>
     </div>
     <div id="stats" class="panel">
-      <div class="big" id="timer">5:00</div><div class="lbl">round ends in</div>
+      <div class="big" id="timer">5:00</div><div class="lbl">round <span id="s-round">1</span> ends in</div>
       <div class="grid">
         <div><b id="s-field">0</b><span>🍎 on field</span></div>
         <div><b id="s-eaten">0</b><span>eaten</span></div>
         <div><b id="s-len">3</b><span>length</span></div>
-        <div><b id="s-round">1</b><span>round</span></div>
+        <div><b id="s-likes">0</b><span>❤ likes</span></div>
       </div>
       <div id="bar"><i id="bar-i"></i></div>
     </div>
@@ -204,7 +205,7 @@ const S = {
   eaten:0, eatenTotal:0,
   supporters:new Map(), // id -> {id,name,avatar,coins}
   roundLikes:new Map(), // id -> {id,name,avatar,likes}
-  particles:[], floats:[],
+  particles:[], floats:[], hearts:[], likesTotal:0,
 };
 const cfg = { applesPerDiamond:1, applesPerFollow:1 };
 
@@ -337,6 +338,9 @@ function drawFx(now){
   for(const f of S.floats){ const a=(now-f.t)/1400; if(a>=1) continue; fx.globalAlpha=1-a; fx.fillStyle='#ffd166';
     fx.strokeStyle='rgba(0,0,0,.6)'; fx.lineWidth=6; const y=1100-a*260; fx.strokeText(f.txt,f.x,y); fx.fillText(f.txt,f.x,y); }
   fx.globalAlpha=1; S.floats=S.floats.filter(f=>now-f.t<1400);
+  for(const h of S.hearts){ const a=(now-h.t)/1800; if(a<0||a>=1) continue; fx.globalAlpha=1-a*a; fx.font=`${h.s}px serif`;
+    fx.fillText('❤️', h.x+Math.sin(a*8+h.d*10)*30, 1500-a*900*h.d-a*200); }
+  fx.globalAlpha=1; S.hearts=S.hearts.filter(h=>now-h.t<1800);
 }
 
 // ---------- sounds (synthesized, no files) ----------
@@ -356,6 +360,7 @@ const sfx=(()=>{
       noise(.05,.9,0,2500); tone(180,.06,'triangle',.5,-100); noise(.07,.6,.05,1500); tone(120,.08,'triangle',.4,-60,.05); }),
     drop:   safe(()=>{ tone(220,.12,'triangle',.4,-120); noise(.06,.15,0,800); }),
     gift:   safe(big=>{ [523,659,784,1046].forEach((f,i)=>tone(f,.25,'triangle',.5,0,i*.08)); if(big){ [1046,1318,1568].forEach((f,i)=>tone(f,.5,'sine',.5,0,.4+i*.1)); } }),
+    like:   safe(()=>{ tone(1500,.06,'sine',.25,400); }),
     follow: safe(()=>{ tone(880,.15,'sine',.5,0,0); tone(1320,.25,'sine',.5,0,.12); }),
     explode:safe(()=>{ noise(.6,.9,0,600); tone(90,.5,'sawtooth',.6,-60); }),
     tick:   safe(()=>{ tone(880,.1,'square',.35); }),
@@ -371,7 +376,7 @@ function updateHud(now){
   const left=Math.max(0,ROUND_MS-(now-S.roundStart)); const m=Math.floor(left/60000), s=Math.floor(left%60000/1000);
   $('timer').textContent=`${m}:${String(s).padStart(2,'0')}`;
   $('s-field').textContent=S.apples.size+(S.pending.length?` +${S.pending.length}`:'');
-  $('s-eaten').textContent=S.eaten; $('s-len').textContent=S.len; $('s-round').textContent=S.round;
+  $('s-eaten').textContent=S.eaten; $('s-len').textContent=S.len; $('s-likes').textContent=S.likesTotal||0;
   $('bar-i').style.width=(S.len/N*100).toFixed(1)+'%';
 }
 
@@ -402,7 +407,11 @@ function onBomb(e){
   sfx.explode();
 }
 function onFollow(e){ sfx.follow(); dropApples(cfg.applesPerFollow,e.user); addEvent('follow',e.user.avatar,`<span class="n">${esc(e.user.name)}</span> followed ➕`,`+${cfg.applesPerFollow} 🍎`); }
-function onLike(e){ const u=e.user; const l=S.roundLikes.get(u.id)||{...u,likes:0}; l.likes+=e.likes; S.roundLikes.set(u.id,l); }
+const likeFeedAt=new Map();
+function onLike(e){ const u=e.user; const l=S.roundLikes.get(u.id)||{...u,likes:0}; l.likes+=e.likes; S.roundLikes.set(u.id,l); S.likesTotal=(S.likesTotal||0)+e.likes;
+  const now=performance.now(); for(let i=0;i<Math.min(12,e.likes);i++) S.hearts.push({t:now+i*90,x:900+Math.random()*120,d:.6+Math.random()*.6,s:26+Math.random()*22});
+  if(now-(likeFeedAt.get(u.id)||0)>8000){ likeFeedAt.set(u.id,now); addEvent('like',u.avatar,`<span class="n">${esc(u.name)}</span> ❤ liked ×${l.likes}`); }
+  sfx.like(); }
 function onChat(e){ addEvent('chat',e.user.avatar,`<span class="n">${esc(e.user.name)}</span> ${esc(e.text)}`); }
 function onJoin(e){ addEvent('join',e.user.avatar,`<span class="n">${esc(e.user.name)}</span> joined 👋`); }
 function esc(s){ return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
