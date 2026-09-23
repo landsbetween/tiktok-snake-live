@@ -182,7 +182,10 @@ async function connectTikTok() {
   });
   conn.on('error', (e) => console.error('TikTok error:', e?.message || e));
 
+  let connecting = false;
   async function tryConnect() {
+    if (connecting || conn.isConnected) return;
+    connecting = true;
     try {
       const state = await conn.connect();
       tiktokStatus = { connected: true, username: USERNAME, error: null, roomId: state.roomId };
@@ -192,9 +195,24 @@ async function connectTikTok() {
       console.error('❌ Connection failed:', tiktokStatus.error, '- retrying in 20s');
       setTimeout(tryConnect, 20000);
     }
+    connecting = false;
     broadcast({ type: 'tiktok', ...tiktokStatus });
   }
   tryConnect();
+
+  // Watchdog: a new "Go LIVE" creates a new room. If the account's current room id changes
+  // (or we lost the connection), reconnect so likes/gifts keep flowing without a manual restart.
+  const probe = new TikTokLiveConnection(USERNAME, { processInitialData: false, fetchRoomInfoOnConnect: false });
+  setInterval(async () => {
+    try {
+      const rid = String(await probe.fetchRoomId());
+      if (rid && rid !== String(tiktokStatus.roomId || '')) {
+        console.log(`🔄 New LIVE room detected (${tiktokStatus.roomId || '-'} -> ${rid}), reconnecting...`);
+        try { await conn.disconnect(); } catch {}
+        setTimeout(tryConnect, 1000);
+      }
+    } catch (e) { /* offline or lookup failed: try again next tick */ }
+  }, 45000);
 }
 
 server.listen(PORT, () => {
