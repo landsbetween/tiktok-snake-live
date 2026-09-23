@@ -358,26 +358,53 @@ function snakePoints(t){
 const headScreen={x:540,y:1000};
 const tmpV=new THREE.Vector3(), tmpM=new THREE.Matrix4(), tmpQ=new THREE.Quaternion(), tmpS=new THREE.Vector3(), tmpP=new THREE.Vector3();
 let lastDraw=0;
+// ---------- snake body: custom tube. Every ring knows its exact distance from the head along the grid path,
+// so the skin UV (T - d) stays glued to the body, and taper/swallow bulges are exact.
+const SPC=6, BRS=14, MAXR=(N+6)*SPC+8, RV=BRS+1;
+const bPos=new Float32Array(MAXR*RV*3), bNor=new Float32Array(MAXR*RV*3), bUv=new Float32Array(MAXR*RV*2), bIdx=new Uint32Array((MAXR-1)*BRS*6);
+for(let k=0,o=0;k<MAXR-1;k++) for(let j=0;j<BRS;j++){ const a=k*RV+j, b=(k+1)*RV+j; bIdx[o++]=a; bIdx[o++]=b; bIdx[o++]=a+1; bIdx[o++]=b; bIdx[o++]=b+1; bIdx[o++]=a+1; }
+const bodyGeo=new THREE.BufferGeometry();
+bodyGeo.setAttribute('position',new THREE.BufferAttribute(bPos,3)); bodyGeo.setAttribute('normal',new THREE.BufferAttribute(bNor,3)); bodyGeo.setAttribute('uv',new THREE.BufferAttribute(bUv,2)); bodyGeo.setIndex(new THREE.BufferAttribute(bIdx,1));
+snakeMesh.geometry.dispose(); snakeMesh.geometry=bodyGeo; snakeMesh.frustumCulled=false;
+skinTex.repeat.set(1,1); skinTex.offset.set(0,0);
+const rawX=new Float32Array(MAXR+8), rawZ=new Float32Array(MAXR+8), smX=new Float32Array(MAXR+8), smZ=new Float32Array(MAXR+8);
+const COS=[], SIN=[]; for(let j=0;j<=BRS;j++){ const a=j/BRS*Math.PI*2; COS.push(Math.cos(a)); SIN.push(Math.sin(a)); }
+function buildBody(pts,T,now){
+  const n=pts.length, dh=new Float32Array(n); for(let i=n-2;i>=0;i--) dh[i]=dh[i+1]+Math.hypot(pts[i+1].x-pts[i].x,pts[i+1].y-pts[i].y);
+  const Ltot=dh[0], step=1/SPC, K=Math.min(MAXR-1,Math.max(1,Math.ceil(Ltot/step)));
+  // raw samples along the polyline from head (k=0) to tail (k=K)
+  let seg=n-2;
+  for(let k=0;k<=K;k++){ const d=Math.min(Ltot,k*step); while(seg>0&&dh[seg]<d) seg--;
+    const d0=dh[seg+1], d1=dh[seg], f=d1>d0?(d-d0)/(d1-d0):0; rawX[k]=lerp(pts[seg+1].x,pts[seg].x,f); rawZ[k]=lerp(pts[seg+1].y,pts[seg].y,f); }
+  // smooth corners (box filter), shrinking the window at the ends so head/tail stay put
+  const M=2; for(let k=0;k<=K;k++){ const m=Math.min(M,k,K-k); let sx=0,sz=0; for(let q=-m;q<=m;q++){ sx+=rawX[k+q]; sz+=rawZ[k+q]; } smX[k]=sx/(2*m+1); smZ[k]=sz/(2*m+1); }
+  const bul=S.bulges||[]; const TAPER=4, R0=.38, Y=.42;
+  for(let k=0;k<=K;k++){ const d=Math.min(Ltot,k*step);
+    const a=Math.max(0,k-1), b=Math.min(K,k+1); let tx=smX[a]-smX[b], tz=smZ[a]-smZ[b]; const tl=Math.hypot(tx,tz)||1; tx/=tl; tz/=tl; // toward head
+    const sx=tz, sz=-tx;
+    const tailD=Ltot-d; const tk=Math.sqrt(Math.min(1,tailD/TAPER)); let r=R0*(.22+.78*tk);
+    let bump=0; for(const bb of bul){ const bd=T-bb.T0+.35; const x=(d-bd)/.45; if(x>-3&&x<3) bump=Math.max(bump,Math.exp(-x*x)); } r*=1+.4*bump*tk;
+    const u=-d/SKIN_PERIOD; // skin is part of the body: a point d behind the head always shows the same pattern
+    for(let j=0;j<=BRS;j++){ const o=(k*RV+j); const nx=sx*COS[j], ny=SIN[j], nz=sz*COS[j];
+      bPos[o*3]=smX[k]+nx*r; bPos[o*3+1]=Y+ny*r; bPos[o*3+2]=smZ[k]+nz*r; bNor[o*3]=nx; bNor[o*3+1]=ny; bNor[o*3+2]=nz; bUv[o*2]=u; bUv[o*2+1]=j/BRS; } }
+  bodyGeo.setDrawRange(0,K*BRS*6);
+  bodyGeo.attributes.position.needsUpdate=bodyGeo.attributes.normal.needsUpdate=bodyGeo.attributes.uv.needsUpdate=true;
+  bodyGeo.boundingSphere=null;
+  tailTip.position.set(smX[K],Y,smZ[K]);
+  S.bulges=bul.filter(bb=>T-bb.T0+.35<Ltot+.5);
+  return {hx:smX[0],hz:smZ[0],px:smX[Math.min(K,3)],pz:smZ[Math.min(K,3)]};
+}
 
 function drawBoard(now){
   const t=Math.min(1,(now-S.lastStep)/S.stepMs); const dt=Math.min(.05,(now-lastDraw)/1000||0); lastDraw=now;
-  // snake tube
-  const pts=snakePoints(t); const v3=pts.map(p=>new THREE.Vector3(p.x,.42,p.y));
-  const curve=new THREE.CatmullRomCurve3(v3,false,'catmullrom',.3);
-  const old=snakeMesh.geometry; const TS=Math.max(8,v3.length*4), RS=12; const tube=new THREE.TubeGeometry(curve,TS,.38,RS,false); old.dispose();
-  // taper: thin tip at the tail, full width after TAPER_LEN cells
-  { const TAPER_LEN=4, L=curve.getLength(), pos=tube.attributes.position, c=new THREE.Vector3(), v=new THREE.Vector3();
-    for(let i=0;i<=TS;i++){ const u=i/TS; const f=.22+.78*Math.min(1,u*L/TAPER_LEN); const k=Math.sqrt(Math.min(1,u*L/TAPER_LEN)); curve.getPointAt(u,c);
-      for(let j=0;j<=RS;j++){ const idx=i*(RS+1)+j; v.fromBufferAttribute(pos,idx).sub(c).multiplyScalar(.22+.78*k).add(c); pos.setXYZ(idx,v.x,v.y,v.z); } }
-    pos.needsUpdate=true; tube.computeVertexNormals(); tailTip.position.copy(curve.getPointAt(0)); }
-  snakeMesh.geometry=tube;
-  { const L=curve.getLength(), rp=L/SKIN_PERIOD; skinTex.repeat.set(rp,1); const T=(S.traveled||0)+t; skinTex.offset.set((((T-L)/SKIN_PERIOD)%1+1)%1,0); }
+  // snake body
+  const T=(S.traveled||0)+t; const bodyInfo=buildBody(snakePoints(t),T,now);
   const H=S.heat; { // fire snake: tint skin toward dark ember and add orange glow; head and tail tip match the body
     const k=Math.min(1,H*1.4); snakeMat.color.setRGB(1,lerp(1,.3,k),lerp(1,.15,k)); snakeMat.emissive.setRGB(.5*k,.12*k,0);
     headMat.color.setRGB(lerp(skinBase.r,.16,k),lerp(skinBase.g,.2,k),lerp(skinBase.b,.13,k)); headMat.emissive.setRGB(.5*k,.12*k,0);
     tailTip.material.color.copy(headMat.color); tailTip.material.emissive.setRGB(.5*k,.12*k,0); }
   // head + crown + avatar
-  const hp=v3[v3.length-1], prev=v3[v3.length-2]||hp; headMesh.position.copy(hp); headMesh.position.y=.5;
+  const hp=new THREE.Vector3(bodyInfo.hx,.42,bodyInfo.hz), prev=new THREE.Vector3(bodyInfo.px,.42,bodyInfo.pz); headMesh.position.copy(hp); headMesh.position.y=.5;
   tmpP.copy(hp).sub(prev); if(tmpP.lengthSq()>1e-6){ const target=Math.atan2(tmpP.x,tmpP.z); let d=target-headYaw; d=Math.atan2(Math.sin(d),Math.cos(d)); headYaw+=d*Math.min(1,dt*14); }
   headMesh.rotation.y=headYaw; headMesh.position.y=.48+Math.sin(now/180)*.025; headMesh.rotation.z=Math.sin(now/260)*.05;
   { const bl=(now%3700)<120; for(const e of eyes) e.userData.lid.scale.y=bl?1:.05; }
@@ -402,10 +429,6 @@ function drawBoard(now){
     else { const t=now/1000+idx*.37; y=.3+Math.abs(Math.sin(t*2.4))*.12; const land=Math.max(0,.12-Math.abs(Math.sin(t*2.4)))/.12; sy=1-land*.12; sx=1+land*.07; }
     const spin=now/900+idx; const tilt=Math.sin(now/500+idx)*.12;
     putApple(x,y,z,sx,sy,spin,tilt,Math.max(.4,1-(y-.3)*.15)); }
-  // eaten apples: quick pop (swell, then shrink to nothing while rising)
-  S.popping=(S.popping||[]).filter(e=>now-e.t<260);
-  for(const e of S.popping){ const k=(now-e.t)/260; const sc=k<.35?1+k/.35*.45:1.45*(1-(k-.35)/.65); const p=path[e.idx];
-    putApple(cx(p),.35+k*.9,cy(p),Math.max(0,sc),Math.max(0,sc),now/150,0,Math.max(0,1-k)); }
   appleMesh.count=leafMesh.count=shadowMesh.count=i; appleMesh.instanceMatrix.needsUpdate=leafMesh.instanceMatrix.needsUpdate=shadowMesh.instanceMatrix.needsUpdate=true;
   // particles
   const live=[]; for(const p of S.particles){ const a=1-(now-p.t)/700; if(a<=0||a>1) continue; p.x+=p.vx*dt; p.y+=p.vy*dt; p.z+=p.vz*dt; p.vy-=9*dt; if(p.y<.05){ p.y=.05; p.vy*=-.4; }
@@ -446,7 +469,7 @@ function step(now){
   S.head=next; S.traveled=(S.traveled||0)+1;
   if(S.grow>0){ S.grow--; S.len++; }
   if(S.apples.has(next)){
-    const a=S.apples.get(next); S.apples.delete(next); (S.popping=S.popping||[]).push({idx:next,t:now}); S.grow++; S.eaten++; S.eatenTotal++;
+    const a=S.apples.get(next); S.apples.delete(next); (S.bulges=S.bulges||[]).push({T0:S.traveled}); S.grow++; S.eaten++; S.eatenTotal++;
     spawnBurst(path[next],16,FRUIT.burst,5);
     if(a.user) floatText(`+1 ${a.user.name}`);
     sfx.eat();
