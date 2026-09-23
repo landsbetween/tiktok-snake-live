@@ -251,7 +251,7 @@ camera.position.copy(CAM_POS); camera.lookAt(CAM_LOOK);
 // lights
 scene.add(new THREE.HemisphereLight(0x8fe8ff,0x0a2a22,.55));
 const sun=new THREE.DirectionalLight(0xfff4e0,1.5); sun.position.set(8,18,6); sun.castShadow=true;
-sun.shadow.mapSize.set(2048,2048); Object.assign(sun.shadow.camera,{left:-12,right:12,top:12,bottom:-12,near:1,far:60}); sun.shadow.bias=-0.0005;
+sun.shadow.mapSize.set(2048,2048); Object.assign(sun.shadow.camera,{left:-12,right:12,top:12,bottom:-12,near:1,far:60}); sun.shadow.bias=-0.0005; sun.shadow.normalBias=.04;
 scene.add(sun);
 const ringLight=new THREE.PointLight(0x7ff3ff,60,60); ringLight.position.set(0,14,-6); scene.add(ringLight);
 const fireLight=new THREE.PointLight(0xff5a00,0,40); fireLight.position.set(0,3,0); scene.add(fireLight);
@@ -269,8 +269,9 @@ const gridTex=(()=>{ const c=document.createElement('canvas'); c.width=COLS*64; 
 const surf=new THREE.Mesh(new THREE.PlaneGeometry(COLS,ROWS),new THREE.MeshStandardMaterial({map:gridTex,roughness:.9,emissive:0xff4400,emissiveIntensity:0}));
 surf.rotation.x=-Math.PI/2; surf.position.y=0.01; surf.receiveShadow=true; scene.add(surf);
 // snake
-const snakeMat=new THREE.MeshStandardMaterial({color:0x155a78,roughness:.4,metalness:.1,emissive:0x082634,emissiveIntensity:.4});
+const snakeMat=new THREE.MeshStandardMaterial({side:THREE.DoubleSide,color:0x155a78,roughness:.4,metalness:.1,emissive:0x082634,emissiveIntensity:.4});
 const snakeMesh=new THREE.Mesh(new THREE.BufferGeometry(),snakeMat); snakeMesh.castShadow=true; snakeMesh.receiveShadow=true; scene.add(snakeMesh);
+const tailTip=new THREE.Mesh(new THREE.SphereGeometry(.38*.22,10,8),snakeMat); scene.add(tailTip);
 const headMesh=new THREE.Mesh(new THREE.SphereGeometry(.58,24,20),new THREE.MeshStandardMaterial({color:0x2a8fb0,roughness:.3,emissive:0x0a3040,emissiveIntensity:.6})); headMesh.castShadow=true; scene.add(headMesh);
 const eyeGeo=new THREE.SphereGeometry(.13,10,8), eyeMat=new THREE.MeshStandardMaterial({color:0xffffff}), pupMat=new THREE.MeshStandardMaterial({color:0x000000});
 const eyes=[0,1].map(i=>{ const e=new THREE.Mesh(eyeGeo,eyeMat); const pp=new THREE.Mesh(new THREE.SphereGeometry(.06,8,6),pupMat); pp.position.set(0,0,.1); e.add(pp); headMesh.add(e); e.position.set(i?.25:-.25,.3,.42); return e; });
@@ -322,8 +323,14 @@ function drawBoard(now){
   // snake tube
   const pts=snakePoints(t); const v3=pts.map(p=>new THREE.Vector3(p.x,.42,p.y));
   const curve=new THREE.CatmullRomCurve3(v3,false,'catmullrom',.3);
-  const old=snakeMesh.geometry; snakeMesh.geometry=new THREE.TubeGeometry(curve,Math.max(8,v3.length*4),.38,12,false); old.dispose();
-  const H=S.heat; snakeMat.color.setRGB(.08,.35,.47); snakeMat.emissive.setRGB(lerp(.03,.25,H),lerp(.15,.08,H),lerp(.2,.05,H));
+  const old=snakeMesh.geometry; const TS=Math.max(8,v3.length*4), RS=12; const tube=new THREE.TubeGeometry(curve,TS,.38,RS,false); old.dispose();
+  // taper: thin tip at the tail, full width after TAPER_LEN cells
+  { const TAPER_LEN=4, L=curve.getLength(), pos=tube.attributes.position, c=new THREE.Vector3(), v=new THREE.Vector3();
+    for(let i=0;i<=TS;i++){ const u=i/TS; const f=.22+.78*Math.min(1,u*L/TAPER_LEN); const k=Math.sqrt(Math.min(1,u*L/TAPER_LEN)); curve.getPointAt(u,c);
+      for(let j=0;j<=RS;j++){ const idx=i*(RS+1)+j; v.fromBufferAttribute(pos,idx).sub(c).multiplyScalar(.22+.78*k).add(c); pos.setXYZ(idx,v.x,v.y,v.z); } }
+    pos.needsUpdate=true; tube.computeVertexNormals(); tailTip.position.copy(curve.getPointAt(0)); }
+  snakeMesh.geometry=tube;
+  const H=S.heat; snakeMat.color.setRGB(.05,.45,.72); snakeMat.emissive.setRGB(lerp(.03,.25,H),lerp(.15,.08,H),lerp(.2,.05,H));
   // head + crown + avatar
   const hp=v3[v3.length-1], prev=v3[v3.length-2]||hp; headMesh.position.copy(hp); headMesh.position.y=.5;
   tmpP.copy(hp).sub(prev); if(tmpP.lengthSq()>1e-6) headMesh.rotation.y=Math.atan2(tmpP.x,tmpP.z);
@@ -410,9 +417,7 @@ function drawFx(now){
       fx.fillStyle=S.banner.col; fx.font='bold 34px Rajdhani'; fx.fillText(S.banner.txt,540,600); fx.globalAlpha=1; } else S.banner=null; }
   if(S.heat>0.05){ const H=S.heat; const g=fx.createRadialGradient(540,1000,500,540,1000,1100); g.addColorStop(0,'rgba(255,60,0,0)'); g.addColorStop(1,`rgba(255,60,0,${H*.45})`);
     fx.fillStyle=g; fx.fillRect(0,0,1080,1920);
-    const lbl=H>0.85?'🔥🔥🔥 INFERNO 🔥🔥🔥':H>0.5?'🔥🔥 ON FIRE 🔥🔥':'🔥 HEATING UP'; fx.font=`bold ${36+H*20}px Orbitron`; fx.textAlign='center';
-    fx.fillStyle=`rgba(255,${180-H*120},40,${.6+H*.4})`; fx.shadowColor='#ff5000'; fx.shadowBlur=30; fx.fillText(lbl,540,1500+Math.sin(now/150)*4*H); fx.shadowBlur=0;
-    fx.font='24px Rajdhani'; fx.fillStyle='rgba(255,220,180,.8)'; fx.fillText(`${S.likeRate} likes / min`,540,1540); }
+  }
 }
 
 // ---------- sounds (synthesized, no files) ----------
@@ -426,10 +431,17 @@ const sfx=(()=>{
   function noise(dur,vol=1,when=0,lp=1200){ const a=ctx(); const b=a.createBuffer(1,a.sampleRate*dur,a.sampleRate); const d=b.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*(1-i/d.length);
     const src=a.createBufferSource(); src.buffer=b; const f=a.createBiquadFilter(); f.type='lowpass'; f.frequency.value=lp; const g=a.createGain(); g.gain.value=vol; src.connect(f); f.connect(g); g.connect(master); src.start(a.currentTime+when); }
   const safe=fn=>(...x)=>{ try{ fn(...x); }catch(e){} };
+  const bites=[]; let lastBite=0, bitesLoading=false;
+  function loadBites(){ if(bitesLoading) return; bitesLoading=true; const a=ctx();
+    [1,2,3,4].forEach((n,i)=>fetch(`sounds/bite${n}.mp3`).then(r=>r.arrayBuffer()).then(b=>a.decodeAudioData(b)).then(buf=>bites[i]=buf).catch(()=>{})); }
   return {
-    unlock: safe(()=>ctx()),
-    eat:    safe(()=>{ // crunchy bite: two short noise bursts + a low thump
-      noise(.05,.9,0,2500); tone(180,.06,'triangle',.5,-100); noise(.07,.6,.05,1500); tone(120,.08,'triangle',.4,-60,.05); }),
+    unlock: safe(()=>{ ctx(); loadBites(); }),
+    eat:    safe(()=>{ // real apple-bite samples, random pick + slight pitch variation
+      const a=ctx(); const t=a.currentTime; if(t-lastBite<.07) return; lastBite=t;
+      const ready=bites.filter(Boolean);
+      if(!ready.length){ noise(.05,.9,0,2500); tone(180,.06,'triangle',.5,-100); return; }
+      const src=a.createBufferSource(); src.buffer=ready[Math.floor(Math.random()*ready.length)]; src.playbackRate.value=.92+Math.random()*.2;
+      const g=a.createGain(); g.gain.value=.9; src.connect(g); g.connect(master); src.start(); }),
     drop:   safe(()=>{ tone(220,.12,'triangle',.4,-120); noise(.06,.15,0,800); }),
     gift:   safe(big=>{ [523,659,784,1046].forEach((f,i)=>tone(f,.25,'triangle',.5,0,i*.08)); if(big){ [1046,1318,1568].forEach((f,i)=>tone(f,.5,'sine',.5,0,.4+i*.1)); } }),
     like:   safe(()=>{ tone(1500,.06,'sine',.25,400); }),
@@ -440,7 +452,7 @@ const sfx=(()=>{
     end:    safe(()=>{ [784,659,523,392].forEach((f,i)=>tone(f,.35,'triangle',.5,0,i*.15)); }),
   };
 })();
-addEventListener('pointerdown',sfx.unlock,{once:true}); addEventListener('keydown',sfx.unlock,{once:true});
+addEventListener('pointerdown',sfx.unlock,{once:true}); addEventListener('keydown',sfx.unlock,{once:true}); sfx.unlock();
 
 function roundRectFx(x,y,w,h,r){ fx.beginPath(); fx.moveTo(x+r,y); fx.arcTo(x+w,y,x+w,y+h,r); fx.arcTo(x+w,y+h,x,y+h,r); fx.arcTo(x,y+h,x,y,r); fx.arcTo(x,y,x+w,y,r); fx.closePath(); }
 function burstConfetti(){ const now=performance.now(); const cols=['#7ff3ff','#ffd166','#ff2f5e','#3ddc84','#ffffff'];
