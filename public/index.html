@@ -48,7 +48,7 @@
   #fx{position:absolute;inset:0;pointer-events:none;z-index:6}
 
   /* Feed */
-  #feed{position:absolute;left:36px;right:36px;bottom:60px;z-index:5;display:flex;flex-direction:column;gap:12px;pointer-events:none}
+  #feed{display:none;position:absolute;left:36px;right:36px;bottom:60px;z-index:5;display:flex;flex-direction:column;gap:12px;pointer-events:none}
   .ev{display:flex;align-items:center;gap:16px;padding:12px 20px;font-size:32px;font-weight:600;
     background:rgba(4,20,30,.6);border:1px solid rgba(255,255,255,.08);border-radius:18px;
     animation:evin .35s cubic-bezier(.2,.9,.3,1.2)}
@@ -221,7 +221,7 @@ renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.PCFShadowMap;
 renderer.outputColorSpace=THREE.SRGBColorSpace;
 const scene=new THREE.Scene();
 const camera=new THREE.PerspectiveCamera(34,1080/1920,1,1200);
-const CAM_POS=new THREE.Vector3(0,34,29.5), CAM_LOOK=new THREE.Vector3(0,0,-4.2);
+const CAM_POS=new THREE.Vector3(0,37,31), CAM_LOOK=new THREE.Vector3(0,0,1.8);
 camera.position.copy(CAM_POS); camera.lookAt(CAM_LOOK);
 
 // lights
@@ -644,7 +644,7 @@ function applyLook(){
   leafMesh.visible=!!F.leaf; if(F.leaf==='leaf'){ leafMesh.geometry=leafGeo; leafMesh.material.map=leafTex; leafMesh.material.color.setHex(0xffffff); }
   else if(F.leaf==='calyx'){ leafMesh.geometry=F.calyxG; leafMesh.material.map=calyxTex; leafMesh.material.color.setHex(F.calyxCol||0xffffff); } leafMesh.material.needsUpdate=true; }
 function newRoundLook(){ SKIN=pickOther(SKINS,SKIN); FRUIT=pickOther(FRUITS,FRUIT); MAP=pickOther(MAPS,MAP); applyLook(); applyMap();
-  S.banner={txt:`${MAP.name} · ${SKIN.name} · ${FRUIT.emoji} ${FRUIT.name}`,t:performance.now(),col:SKIN.light}; }
+  showBanner(`${MAP.name} · ${SKIN.name} · ${FRUIT.emoji} ${FRUIT.name}`,SKIN.light); }
 const shadowMesh=new THREE.InstancedMesh(new THREE.CircleGeometry(.3,16),new THREE.MeshBasicMaterial({color:0x000000,transparent:true,opacity:.35,depthWrite:false}),MAXA); scene.add(shadowMesh); shadowMesh.frustumCulled=false;
 
 // particles + fire (points)
@@ -812,9 +812,12 @@ function drawFx(now){
   for(const c of S.confetti){ const a=(now-c.t)/1600; if(a>=1) continue; fx.globalAlpha=1-a; fx.fillStyle=c.col; fx.save();
     fx.translate(c.x+c.vx*a*400, c.y+c.vy*a*400+a*a*700); fx.rotate(a*c.rot); fx.fillRect(-7,-4,14,8); fx.restore(); }
   fx.globalAlpha=1; S.confetti=S.confetti.filter(c=>now-c.t<1600);
-  if(S.banner){ const a=(now-S.banner.t)/2800; if(a<1){ const k=Math.min(1,a*6)*Math.min(1,(1-a)*6); fx.globalAlpha=k; fx.textAlign='center';
-      fx.fillStyle='rgba(0,0,0,.55)'; roundRectFx(290,548,500,80,20); fx.fill(); fx.strokeStyle=S.banner.col; fx.lineWidth=3; fx.stroke();
-      fx.fillStyle=S.banner.col; fx.font='bold 34px Rajdhani'; fx.fillText(S.banner.txt,540,600); fx.globalAlpha=1; } else S.banner=null; }
+  if(!S.banner&&bannerQ.length){ const b=bannerQ.shift(); S.banner={...b,t:now,dur:bannerQ.length>2?1700:2800}; }
+  if(S.banner){ const B=S.banner, dur=B.dur||2800, a=(now-B.t)/dur; if(a<1){ const k=Math.min(1,a*6)*Math.min(1,(1-a)*6); fx.globalAlpha=k; fx.textAlign='center';
+      fx.font='bold 40px Rajdhani'; const im=B.avatar&&img(B.avatar), pad=im?76:0; const w=Math.min(1000,fx.measureText(B.txt).width+70+pad), x=540-w/2, y=300-(1-Math.min(1,a*6))*20;
+      fx.fillStyle='rgba(0,0,0,.6)'; roundRectFx(x,y,w,88,44); fx.fill(); fx.strokeStyle=B.col; fx.lineWidth=4; fx.stroke();
+      if(im){ fx.save(); fx.beginPath(); fx.arc(x+50,y+44,30,0,7); fx.clip(); fx.drawImage(im,x+20,y+14,60,60); fx.restore(); }
+      fx.fillStyle=B.col; fx.fillText(B.txt,540+pad/2,y+58); fx.globalAlpha=1; } else S.banner=null; }
   if(S.heat>0.05){ const H=S.heat; const g=fx.createRadialGradient(540,1000,500,540,1000,1100); g.addColorStop(0,'rgba(255,60,0,0)'); g.addColorStop(1,`rgba(255,60,0,${H*.45})`);
     fx.fillStyle=g; fx.fillRect(0,0,1080,1920);
   }
@@ -862,6 +865,8 @@ const sfx=(()=>{
 })();
 addEventListener('pointerdown',sfx.unlock,{once:true}); addEventListener('keydown',sfx.unlock,{once:true}); sfx.unlock();
 
+const bannerQ=[];
+function showBanner(txt,col,avatar){ if(bannerQ.length>=6) bannerQ.shift(); bannerQ.push({txt,col,avatar}); }
 function roundRectFx(x,y,w,h,r){ fx.beginPath(); fx.moveTo(x+r,y); fx.arcTo(x+w,y,x+w,y+h,r); fx.arcTo(x+w,y+h,x,y+h,r); fx.arcTo(x,y+h,x,y,r); fx.arcTo(x,y,x+w,y,r); fx.closePath(); }
 function burstConfetti(){ const now=performance.now(); const cols=['#7ff3ff','#ffd166','#ff2f5e','#3ddc84','#ffffff'];
   for(let i=0;i<70;i++){ const ang=Math.random()*Math.PI*2, sp=.4+Math.random(); S.confetti.push({t:now,x:540,y:520,vx:Math.cos(ang)*sp,vy:Math.sin(ang)*sp-.8,rot:(Math.random()-.5)*20,col:cols[i%cols.length]}); } }
@@ -879,6 +884,8 @@ function updateHud(now){
 // ---------- feed ----------
 const feed=$('feed');
 function addEvent(cls,avatar,html,plus){
+  if(cls==='gift'||cls==='bomb'){ const t=document.createElement('div'); t.innerHTML=html; showBanner(`${t.textContent.trim()}   ${plus||''}`, cls==='bomb'?'#ff7a1a':'#ffd166', avatar); }
+  return; // likes, chat and joins are already shown by TikTok itself
   const d=document.createElement('div'); d.className='ev '+cls;
   d.innerHTML=`<div class="av" style="${avatar?`background-image:url('${avatar}')`:''}"></div><div>${html}</div>${plus?`<div class="plus">${plus}</div>`:''}`;
   feed.appendChild(d); while(feed.children.length>5) feed.removeChild(feed.firstChild);
@@ -901,7 +908,7 @@ function onBomb(e){
   addEvent('bomb',u.avatar,`<span class="n">${esc(u.name)}</span> 💣 ${esc(e.giftName)}${e.count>1?' ×'+e.count:''} blew up the tail!`,`−${cut} 🐍`);
   sfx.explode();
 }
-function onFollow(e){ sfx.follow(); burstConfetti(); S.banner={txt:`➕ NEW FOLLOWER · ${e.user.name}`,t:performance.now(),col:'#7ff3ff'}; dropApples(cfg.applesPerFollow,e.user); addEvent('follow',e.user.avatar,`<span class="n">${esc(e.user.name)}</span> followed ➕`,`+${cfg.applesPerFollow} ${FRUIT.emoji}`); }
+function onFollow(e){ sfx.follow(); burstConfetti(); showBanner(`➕ NEW FOLLOWER · ${e.user.name}`,'#7ff3ff',e.user.avatar); dropApples(cfg.applesPerFollow,e.user); addEvent('follow',e.user.avatar,`<span class="n">${esc(e.user.name)}</span> followed ➕`,`+${cfg.applesPerFollow} ${FRUIT.emoji}`); }
 const likeFeedAt=new Map();
 function onLike(e){ const u=e.user; const l=S.roundLikes.get(u.id)||{...u,likes:0}; l.likes+=e.likes; S.roundLikes.set(u.id,l); S.likesTotal=(S.likesTotal||0)+e.likes; S.likeLog.push([performance.now(),e.likes]);
   S.likeBank+=e.likes; while(S.likeBank>=LIKES_PER_APPLE){ S.likeBank-=LIKES_PER_APPLE; dropApples(1,u); floatText(`❤ ${LIKES_PER_APPLE} likes = ${FRUIT.emoji}`); }
