@@ -268,11 +268,6 @@ const gridTex=(()=>{ const c=document.createElement('canvas'); c.width=COLS*64; 
   const t=new THREE.CanvasTexture(c); t.colorSpace=THREE.SRGBColorSpace; return t; })();
 const surf=new THREE.Mesh(new THREE.PlaneGeometry(COLS,ROWS),new THREE.MeshStandardMaterial({map:gridTex,roughness:.9,emissive:0xff4400,emissiveIntensity:0}));
 surf.rotation.x=-Math.PI/2; surf.position.y=0.01; surf.receiveShadow=true; scene.add(surf);
-// border beads
-{ const pts=[]; for(let c=0;c<=COLS;c++){ pts.push([wx(c)-.5,wz(0)-.5-.35]); pts.push([wx(c)-.5,wz(ROWS)-.5+.35]); } for(let r=1;r<ROWS;r++){ pts.push([wx(0)-.5-.35,wz(r)-.5]); pts.push([wx(COLS)-.5+.35,wz(r)-.5]); }
-  const beads=new THREE.InstancedMesh(new THREE.SphereGeometry(.17,12,10),new THREE.MeshStandardMaterial({color:0xbfefff,emissive:0x7ff3ff,emissiveIntensity:.9,roughness:.3}),pts.length);
-  const m=new THREE.Matrix4(); pts.forEach((p,i)=>{ m.makeTranslation(p[0],.12,p[1]); beads.setMatrixAt(i,m); }); scene.add(beads); }
-
 // snake
 const snakeMat=new THREE.MeshStandardMaterial({color:0x155a78,roughness:.4,metalness:.1,emissive:0x082634,emissiveIntensity:.4});
 const snakeMesh=new THREE.Mesh(new THREE.BufferGeometry(),snakeMat); snakeMesh.castShadow=true; snakeMesh.receiveShadow=true; scene.add(snakeMesh);
@@ -303,7 +298,8 @@ const shadowMesh=new THREE.InstancedMesh(new THREE.CircleGeometry(.3,16),new THR
 const softTex=(()=>{ const c=document.createElement('canvas'); c.width=c.height=64; const g=c.getContext('2d'); const r=g.createRadialGradient(32,32,0,32,32,32); r.addColorStop(0,'rgba(255,255,255,1)'); r.addColorStop(.4,'rgba(255,255,255,.5)'); r.addColorStop(1,'rgba(255,255,255,0)'); g.fillStyle=r; g.fillRect(0,0,64,64); return new THREE.CanvasTexture(c); })();
 function makePoints(max,size,additive){ const geo=new THREE.BufferGeometry(); geo.setAttribute('position',new THREE.BufferAttribute(new Float32Array(max*3),3)); geo.setAttribute('color',new THREE.BufferAttribute(new Float32Array(max*3),3));
   const mat=new THREE.PointsMaterial({size,map:softTex,vertexColors:true,transparent:true,depthWrite:false,blending:additive?THREE.AdditiveBlending:THREE.NormalBlending}); const pts=new THREE.Points(geo,mat); pts.frustumCulled=false; scene.add(pts); return pts; }
-const partPts=makePoints(3000,.28,false), fireBig=makePoints(1500,2.2,true), fireSmall=makePoints(1500,1.0,true);
+const partPts=makePoints(3000,.28,false), smokePts=makePoints(1500,3.2,false), fireBig=makePoints(3000,2.6,true), fireSmall=makePoints(3000,1.3,true);
+smokePts.material.opacity=.35; const fireParts=[];
 function fillPoints(pts,arr){ const pos=pts.geometry.attributes.position, col=pts.geometry.attributes.color; let n=0;
   for(const p of arr){ if(n>=pos.count) break; pos.setXYZ(n,p.x,p.y,p.z); col.setXYZ(n,p.r,p.g,p.b); n++; } pts.geometry.setDrawRange(0,n); pos.needsUpdate=true; col.needsUpdate=true; }
 const hexToRgb=h=>{ const v=parseInt(h.slice(1),16); return [(v>>16&255)/255,(v>>8&255)/255,(v&255)/255]; };
@@ -327,7 +323,7 @@ function drawBoard(now){
   const pts=snakePoints(t); const v3=pts.map(p=>new THREE.Vector3(p.x,.42,p.y));
   const curve=new THREE.CatmullRomCurve3(v3,false,'catmullrom',.3);
   const old=snakeMesh.geometry; snakeMesh.geometry=new THREE.TubeGeometry(curve,Math.max(8,v3.length*4),.38,12,false); old.dispose();
-  const H=S.heat; snakeMat.color.setRGB(lerp(.10,.95,H*H),lerp(.42,.35,H),lerp(.53,.08,H)); snakeMat.emissive.setRGB(lerp(.04,.6,H),lerp(.19,.15,H),lerp(.25,0,H));
+  const H=S.heat; snakeMat.color.setRGB(.08,.35,.47); snakeMat.emissive.setRGB(lerp(.03,.25,H),lerp(.15,.08,H),lerp(.2,.05,H));
   // head + crown + avatar
   const hp=v3[v3.length-1], prev=v3[v3.length-2]||hp; headMesh.position.copy(hp); headMesh.position.y=.5;
   tmpP.copy(hp).sub(prev); if(tmpP.lengthSq()>1e-6) headMesh.rotation.y=Math.atan2(tmpP.x,tmpP.z);
@@ -347,17 +343,25 @@ function drawBoard(now){
   const live=[]; for(const p of S.particles){ const a=1-(now-p.t)/700; if(a<=0||a>1) continue; p.x+=p.vx*dt; p.y+=p.vy*dt; p.z+=p.vz*dt; p.vy-=9*dt; if(p.y<.05){ p.y=.05; p.vy*=-.4; }
     live.push({x:p.x,y:p.y,z:p.z,r:p.col[0]*a,g:p.col[1]*a,b:p.col[2]*a}); }
   fillPoints(partPts,live); S.particles=S.particles.filter(p=>now-p.t<700);
-  // fire
-  const big=[], small=[];
-  if(H>0.02){ const L=wx(0)-.5-.4, R=wx(COLS-1)+.5+.4, T=wz(0)-.5-.4, B=wz(ROWS-1)+.5+.4, per=2*(R-L)+2*(B-T);
-    const nEdge=Math.round(40+H*260);
-    for(let k=0;k<nEdge;k++){ const u=((k/nEdge)+now/15000)%1*per; let x,z; if(u<R-L){x=L+u;z=B;} else if(u<(R-L)+(B-T)){x=R;z=B-(u-(R-L));} else if(u<2*(R-L)+(B-T)){x=R-(u-(R-L)-(B-T));z=T;} else {x=L;z=T+(u-2*(R-L)-(B-T));}
-      const rise=((now/900)+k*.37)%1; const f=1-rise; const y=rise*(1.2+2.5*H); const fl=Math.sin(now/60+k*3)*.15+.85;
-      const col={r:1*f*fl,g:(.55-rise*.4)*f*fl,b:.05*f}; (k%2?big:small).push({x:x+Math.sin(now/300+k)*.15,y,z:z+Math.cos(now/280+k)*.15,...col}); }
-    if(H>0.45){ const nIn=Math.round((H-.45)*500); for(let k=0;k<nIn;k++){ const q=(Math.sin(k*12.9898)*43758.5453)%1, w=(Math.sin(k*78.233)*43758.5453)%1; const rise=((now/1300)+Math.abs(q)*3)%1; const f=(1-rise)*(H-.45)/.55;
-      (k%3?small:big).push({x:wx(0)-.5+Math.abs(q)*COLS,y:.2+rise*3,z:wz(0)-.5+Math.abs(w)*ROWS,r:f,g:.45*f,b:.03*f}); } } }
+  // fire: particles born on a ring just OUTSIDE the field, rising with turbulence; never on the field
+  const big=[], small=[], smoke=[];
+  const EX=COLS/2+.7, EZ=ROWS/2+.7;       // inner edge of the fire ring (field half-size + margin)
+  const spawn=H>0.02?Math.round((120+H*1500)*dt+Math.random()):0;
+  for(let k=0;k<spawn;k++){ const per=2*(2*EX)+2*(2*EZ); let u=Math.random()*per, x, z, nx, nz;
+    if(u<2*EX){x=-EX+u;z=EZ;nx=0;nz=1;} else if((u-=2*EX)<2*EZ){x=EX;z=EZ-u;nx=1;nz=0;} else if((u-=2*EZ)<2*EX){x=EX-u;z=-EZ;nx=0;nz=-1;} else {u-=2*EX;x=-EX;z=-EZ+u;nx=-1;nz=0;}
+    const out=Math.random()*.6; fireParts.push({x:x+nx*out,y:0,z:z+nz*out,nx,nz,vy:.9+Math.random()*1.1*(.4+H),life:.35+Math.random()*.5*(.6+H),age:0,seed:Math.random()*100,smoke:Math.random()<.18}); }
+  for(let k=fireParts.length-1;k>=0;k--){ const p=fireParts[k]; p.age+=dt; const a=p.age/p.life; if(a>=1){ fireParts.splice(k,1); continue; }
+    const tw=Math.sin(now/180+p.seed)*.6; p.y+=p.vy*dt; p.x+=(tw*.3+p.nx*.25)*dt; p.z+=(Math.cos(now/210+p.seed)*.3+p.nz*.25)*dt;
+    // keep flames off the field: clamp to the ring
+    if(Math.abs(p.x)<EX&&Math.abs(p.z)<EZ){ if(p.nx) p.x=Math.sign(p.nx)*EX; else p.z=Math.sign(p.nz)*EZ; }
+    if(p.smoke){ const f=Math.sin(a*Math.PI)*.5; smoke.push({x:p.x,y:p.y+1.2,z:p.z,r:.10*f,g:.09*f,b:.08*f}); continue; }
+    // color over life: white-yellow core -> orange -> deep red -> fade
+    let r,g,bb; if(a<.2){ r=1; g=.95-a*1.5; bb=.6-a*2.5; } else if(a<.6){ const q=(a-.2)/.4; r=1; g=.65-q*.4; bb=.05; } else { const q=(a-.6)/.4; r=1-q*.6; g=.25-q*.22; bb=.03; }
+    const fade=(1-a)*(a<.08?a/.08:1)*(.6+.4*Math.sin(now/40+p.seed));
+    (a<.35?small:big).push({x:p.x,y:p.y,z:p.z,r:r*fade,g:Math.max(0,g)*fade,b:Math.max(0,bb)*fade}); }
+  fillPoints(smokePts,smoke);
   fillPoints(fireBig,big); fillPoints(fireSmall,small);
-  fireLight.intensity=H*80+ (H>0?Math.sin(now/70)*10*H:0); fieldMat.emissiveIntensity=surf.material.emissiveIntensity=H*.35;
+  fireLight.intensity=H*12+ (H>0?Math.sin(now/70)*10*H:0); 
   // camera shake
   const sh=S.shake?Math.max(0,1-(now-S.shake)/500):0;
   camera.position.copy(CAM_POS); camera.lookAt(CAM_LOOK);
@@ -471,10 +475,9 @@ function onGift(e){
 }
 function onBomb(e){
   const u=e.user; const s=S.supporters.get(u.id)||{...u,coins:0}; s.coins+=e.coins; s.name=u.name; if(u.avatar) s.avatar=u.avatar; S.supporters.set(u.id,s);
-  const cut=Math.min(e.power, Math.max(0,S.len-START_LEN));
+  const cut=Math.min(e.power, Math.max(0,S.len-START_LEN-(S.shrink||0)));
   const now=performance.now(); const tail=(S.head-S.len+1+N)%N;
-  for(let i=0;i<cut;i++) spawnBurst(path[(tail+i)%N],10,['#ff7a1a','#ffd166','#ffffff'],8);
-  S.len-=cut; S.grow=0; S.shake=now;
+  S.shrink=(S.shrink||0)+cut; S.grow=0; S.shake=now;
   addEvent('bomb',u.avatar,`<span class="n">${esc(u.name)}</span> 💣 ${esc(e.giftName)}${e.count>1?' ×'+e.count:''} blew up the tail!`,`−${cut} 🐍`);
   sfx.explode();
 }
@@ -546,9 +549,12 @@ function loop(now){
   const cut=now-60000; while(S.likeLog.length&&S.likeLog[0][0]<cut) S.likeLog.shift();
   const rate=S.likeLog.reduce((a,[,n])=>a+n,0); const target=Math.max(0,Math.min(1,(rate-FIRE_START)/(FIRE_MAX-FIRE_START)));
   S.heat+=(target-S.heat)*0.02; S.likeRate=rate;
-  if(S.heat>0.6&&Math.random()<0.02) S.hearts.push({t:now,x:100+Math.random()*880,d:.8,s:30});
+  if(false) S.hearts.push({t:now,x:100+Math.random()*880,d:.8,s:30});
   // there is always at least one apple on the board
   if(S.phase==='play'&&S.apples.size===0&&!S.pending.length) dropApples(1,null);
+  // bomb: pop tail segments one by one (smooth, no frame spike)
+  if(S.shrink>0 && now-(S.lastShrink||0)>30){ S.lastShrink=now;
+    if(S.len>START_LEN){ const tail=(S.head-S.len+1+N)%N; spawnBurst(path[tail],6,['#ff7a1a','#ffd166','#ffffff'],7); S.len--; S.shrink--; } else S.shrink=0; }
   if(S.phase==='play') drainPending();
   drawBoard(now); drawFx(now); updateHud(now);
   requestAnimationFrame(loop);
