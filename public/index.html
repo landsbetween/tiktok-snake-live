@@ -211,15 +211,23 @@ const cfg = { applesPerDiamond:1, applesPerFollow:1 };
 function occupied(){ const s=new Set(); for(let i=0;i<S.len;i++) s.add((S.head-i+N)%N); return s; }
 function freeCells(){ const occ=occupied(); const f=[]; for(let i=0;i<N;i++) if(!occ.has(i)&&!S.apples.has(i)) f.push(i); return f; }
 function dropApples(n,user){ for(let i=0;i<n;i++) S.pending.push({user}); }
+// Apples spawn on the path ahead of the head, 1-4 seconds of travel away.
+const SPAWN_AHEAD_MIN_S=1, SPAWN_AHEAD_MAX_S=4;
 function drainPending(){
   if(!S.pending.length) return;
-  let free=freeCells();
-  while(S.pending.length && free.length){
-    const k=Math.floor(Math.random()*free.length); const idx=free[k]; free.splice(k,1);
-    const {user}=S.pending.shift();
-    S.apples.set(idx,{born:performance.now(),user});
+  const occ=occupied(); let dropped=0;
+  const minC=Math.max(1,Math.round(SPAWN_AHEAD_MIN_S*1000/S.stepMs)), maxC=Math.min(N-S.len-1,Math.round(SPAWN_AHEAD_MAX_S*1000/S.stepMs));
+  const window=[]; for(let d=minC;d<=maxC;d++){ const idx=(S.head+d)%N; if(!occ.has(idx)&&!S.apples.has(idx)) window.push(idx); }
+  while(S.pending.length && window.length){
+    const k=Math.floor(Math.random()*window.length); const idx=window.splice(k,1)[0];
+    S.apples.set(idx,{born:performance.now(),user:S.pending.shift().user}); dropped++;
   }
-  sfx.drop();
+  // window full: fall back to any free cell further along the path
+  if(S.pending.length){
+    const free=[]; for(let d=maxC+1;d<N-S.len;d++){ const idx=(S.head+d)%N; if(!occ.has(idx)&&!S.apples.has(idx)) free.push(idx); }
+    while(S.pending.length && free.length){ const idx=free.shift(); S.apples.set(idx,{born:performance.now(),user:S.pending.shift().user}); dropped++; }
+  }
+  if(dropped) sfx.drop();
 }
 
 // ---------- images ----------
