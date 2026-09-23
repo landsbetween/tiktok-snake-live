@@ -111,7 +111,8 @@
       <div class="row"><span class="ic">🌌</span>Galaxy <span class="val">+1000 🍎</span></div>
       <div class="row"><span class="ic">➕</span>Follow <span class="val">+1 🍎</span></div>
       <div class="row"><span class="ic">💣</span>GG / Fireworks <span class="val" style="color:var(--apple)">−💎 tail</span></div>
-      <div class="row" style="font-size:22px;color:var(--muted);padding-top:10px">1 💎 = 1 🍎 · any gift</div>
+      <div class="row"><span class="ic">❤</span>50 likes <span class="val">+1 🍎</span></div>
+      <div class="row" style="font-size:22px;color:var(--muted);padding-top:10px">1 💎 = 1 🍎 · any gift · likes = 🔥</div>
     </div>
     <div id="stats" class="panel">
       <div class="big" id="timer">5:00</div><div class="lbl">round <span id="s-round">1</span> ends in</div>
@@ -140,7 +141,7 @@
   </div>
   <div id="countdown"><small>GET READY</small><b id="cd-n">3</b></div>
 
-  <div id="conn"><i></i><span id="conn-t">demo mode — G gift · B bomb · F follow · L like</span></div>
+  <div id="conn"><i></i><span id="conn-t">demo mode — G gift · B bomb · F follow · L like · K like storm</span></div>
 </div>
 
 <script>
@@ -205,7 +206,7 @@ const S = {
   eaten:0, eatenTotal:0,
   supporters:new Map(), // id -> {id,name,avatar,coins}
   roundLikes:new Map(), // id -> {id,name,avatar,likes}
-  particles:[], floats:[], hearts:[], likesTotal:0,
+  particles:[], floats:[], hearts:[], likesTotal:0, likeLog:[], heat:0, likeBank:0, confetti:[], banner:null,
 };
 const cfg = { applesPerDiamond:1, applesPerFollow:1 };
 
@@ -214,6 +215,8 @@ function freeCells(){ const occ=occupied(); const f=[]; for(let i=0;i<N;i++) if(
 function dropApples(n,user){ for(let i=0;i<n;i++) S.pending.push({user}); }
 // Apples spawn on the path ahead of the head, 1-4 seconds of travel away.
 const SPAWN_AHEAD_MIN_S=1, SPAWN_AHEAD_MAX_S=4;
+const LIKES_PER_APPLE=50;            // every 50 likes drop one apple
+const FIRE_START=40, FIRE_MAX=400;   // likes per minute: where the fire starts / is at full blast
 function drainPending(){
   if(!S.pending.length) return;
   const occ=occupied(); let dropped=0;
@@ -285,7 +288,7 @@ function drawBoard(now){
   const W=CELL*.78;
   strokePath(pts,W+10,'rgba(0,0,0,.35)',8);      // shadow
   strokePath(pts,W,'#0b2a38',0);                  // outline
-  strokePath(pts,W-10,'#17546d',0);               // body
+  strokePath(pts,W-10,S.heat>0.5?`rgb(${Math.round(23+S.heat*200)},84,${Math.round(109-S.heat*80)})`:'#17546d',0); // body reddens on fire
   strokePath(pts,W*.35,'rgba(127,243,255,.35)',-W*.18); // highlight
   // head
   const h=pts[pts.length-1]; const r=W*.62;
@@ -300,6 +303,20 @@ function drawBoard(now){
   if(ts){ bc.font='bold 22px Rajdhani'; bc.fillStyle='#ffd166'; bc.strokeStyle='rgba(0,0,0,.7)'; bc.lineWidth=4;
     bc.strokeText(ts.name,h.x,h.y+r+26); bc.fillText(ts.name,h.x,h.y+r+26); }
 
+  // fire: grows with like rate. Edges first, then the whole field burns.
+  if(S.heat>0.02){
+    const H=S.heat; bc.save(); bc.globalCompositeOperation='lighter';
+    const flame=(x,y,sz)=>{ const g=bc.createRadialGradient(x,y,0,x,y,sz); g.addColorStop(0,`rgba(255,240,150,${.9*H})`); g.addColorStop(.35,`rgba(255,120,20,${.6*H})`); g.addColorStop(1,'rgba(255,40,0,0)');
+      bc.fillStyle=g; bc.beginPath(); bc.ellipse(x,y,sz*.6,sz,0,0,7); bc.fill(); };
+    const nEdge=Math.round(10+H*50), L=OX-18, R=OX+CELL*COLS+18, T=OY-18, B=OY+CELL*ROWS+18;
+    for(let i=0;i<nEdge;i++){ const u=(i/nEdge+now/9000)%1; const fl=Math.sin(now/90+i*7)*0.3+1; const sz=(30+H*40)*fl;
+      flame(L+(R-L)*u, B-Math.abs(Math.sin(now/200+i))*20*H, sz); flame(L+(R-L)*((u+.5)%1), T+Math.abs(Math.sin(now/230+i))*10*H, sz*.8);
+      if(i%2){ flame(L, T+(B-T)*u, sz*.8); flame(R, T+(B-T)*((u+.3)%1), sz*.8); } }
+    if(H>0.5){ const nIn=Math.round((H-0.5)*160); for(let i=0;i<nIn;i++){ const q=(i*7919)%1000/1000, w=(i*104729)%1000/1000; const rise=((now/1400+q*3)%1);
+      flame(OX+q*CELL*COLS, OY+CELL*ROWS*(w*(1-rise*.3)), (20+40*(H-0.5))*(1-rise)*(Math.sin(now/70+i)*.3+1)); } }
+    bc.restore();
+    bc.fillStyle=`rgba(255,80,0,${H*.12})`; bc.fillRect(OX-18,OY-18,CELL*COLS+36,CELL*ROWS+36);
+  }
   // particles (board space)
   for(const p of S.particles){ const a=1-(now-p.t)/600; if(a<=0||a>1) continue; bc.globalAlpha=a; bc.fillStyle=p.col;
     bc.beginPath(); bc.arc(p.x+p.vx*(now-p.t)/16,p.y+p.vy*(now-p.t)/16,4,0,7); bc.fill(); }
@@ -341,6 +358,17 @@ function drawFx(now){
   for(const h of S.hearts){ const a=(now-h.t)/1800; if(a<0||a>=1) continue; fx.globalAlpha=1-a*a; fx.font=`${h.s}px serif`;
     fx.fillText('❤️', h.x+Math.sin(a*8+h.d*10)*30, 1500-a*900*h.d-a*200); }
   fx.globalAlpha=1; S.hearts=S.hearts.filter(h=>now-h.t<1800);
+  for(const c of S.confetti){ const a=(now-c.t)/1600; if(a>=1) continue; fx.globalAlpha=1-a; fx.fillStyle=c.col; fx.save();
+    fx.translate(c.x+c.vx*a*400, c.y+c.vy*a*400+a*a*700); fx.rotate(a*c.rot); fx.fillRect(-7,-4,14,8); fx.restore(); }
+  fx.globalAlpha=1; S.confetti=S.confetti.filter(c=>now-c.t<1600);
+  if(S.banner){ const a=(now-S.banner.t)/2800; if(a<1){ const k=Math.min(1,a*6)*Math.min(1,(1-a)*6); fx.globalAlpha=k; fx.textAlign='center';
+      fx.fillStyle='rgba(0,0,0,.55)'; roundRectFx(290,548,500,80,20); fx.fill(); fx.strokeStyle=S.banner.col; fx.lineWidth=3; fx.stroke();
+      fx.fillStyle=S.banner.col; fx.font='bold 34px Rajdhani'; fx.fillText(S.banner.txt,540,600); fx.globalAlpha=1; } else S.banner=null; }
+  if(S.heat>0.05){ const H=S.heat; const g=fx.createRadialGradient(540,1000,500,540,1000,1100); g.addColorStop(0,'rgba(255,60,0,0)'); g.addColorStop(1,`rgba(255,60,0,${H*.45})`);
+    fx.fillStyle=g; fx.fillRect(0,0,1080,1920);
+    const lbl=H>0.85?'🔥🔥🔥 INFERNO 🔥🔥🔥':H>0.5?'🔥🔥 ON FIRE 🔥🔥':'🔥 HEATING UP'; fx.font=`bold ${36+H*20}px Orbitron`; fx.textAlign='center';
+    fx.fillStyle=`rgba(255,${180-H*120},40,${.6+H*.4})`; fx.shadowColor='#ff5000'; fx.shadowBlur=30; fx.fillText(lbl,540,1560+Math.sin(now/150)*4*H); fx.shadowBlur=0;
+    fx.font='24px Rajdhani'; fx.fillStyle='rgba(255,220,180,.8)'; fx.fillText(`${S.likeRate} likes / min`,540,1600); }
 }
 
 // ---------- sounds (synthesized, no files) ----------
@@ -370,13 +398,17 @@ const sfx=(()=>{
 })();
 addEventListener('pointerdown',sfx.unlock,{once:true}); addEventListener('keydown',sfx.unlock,{once:true});
 
+function roundRectFx(x,y,w,h,r){ fx.beginPath(); fx.moveTo(x+r,y); fx.arcTo(x+w,y,x+w,y+h,r); fx.arcTo(x+w,y+h,x,y+h,r); fx.arcTo(x,y+h,x,y,r); fx.arcTo(x,y,x+w,y,r); fx.closePath(); }
+function burstConfetti(){ const now=performance.now(); const cols=['#7ff3ff','#ffd166','#ff2f5e','#3ddc84','#ffffff'];
+  for(let i=0;i<70;i++){ const ang=Math.random()*Math.PI*2, sp=.4+Math.random(); S.confetti.push({t:now,x:540,y:520,vx:Math.cos(ang)*sp,vy:Math.sin(ang)*sp-.8,rot:(Math.random()-.5)*20,col:cols[i%cols.length]}); } }
+
 // ---------- HUD ----------
 const $=id=>document.getElementById(id);
 function updateHud(now){
   const left=Math.max(0,ROUND_MS-(now-S.roundStart)); const m=Math.floor(left/60000), s=Math.floor(left%60000/1000);
   $('timer').textContent=`${m}:${String(s).padStart(2,'0')}`;
   $('s-field').textContent=S.apples.size+(S.pending.length?` +${S.pending.length}`:'');
-  $('s-eaten').textContent=S.eaten; $('s-len').textContent=S.len; $('s-likes').textContent=S.likesTotal||0;
+  $('s-eaten').textContent=S.eaten; $('s-len').textContent=S.len; $('s-likes').textContent=S.likesTotal||0; $('s-likes').style.color=S.heat>0.05?`rgb(255,${Math.round(200-S.heat*150)},60)`:'';
   $('bar-i').style.width=(S.len/N*100).toFixed(1)+'%';
 }
 
@@ -406,9 +438,10 @@ function onBomb(e){
   addEvent('bomb',u.avatar,`<span class="n">${esc(u.name)}</span> 💣 ${esc(e.giftName)}${e.count>1?' ×'+e.count:''} blew up the tail!`,`−${cut} 🐍`);
   sfx.explode();
 }
-function onFollow(e){ sfx.follow(); dropApples(cfg.applesPerFollow,e.user); addEvent('follow',e.user.avatar,`<span class="n">${esc(e.user.name)}</span> followed ➕`,`+${cfg.applesPerFollow} 🍎`); }
+function onFollow(e){ sfx.follow(); burstConfetti(); S.banner={txt:`➕ NEW FOLLOWER · ${e.user.name}`,t:performance.now(),col:'#7ff3ff'}; dropApples(cfg.applesPerFollow,e.user); addEvent('follow',e.user.avatar,`<span class="n">${esc(e.user.name)}</span> followed ➕`,`+${cfg.applesPerFollow} 🍎`); }
 const likeFeedAt=new Map();
-function onLike(e){ const u=e.user; const l=S.roundLikes.get(u.id)||{...u,likes:0}; l.likes+=e.likes; S.roundLikes.set(u.id,l); S.likesTotal=(S.likesTotal||0)+e.likes;
+function onLike(e){ const u=e.user; const l=S.roundLikes.get(u.id)||{...u,likes:0}; l.likes+=e.likes; S.roundLikes.set(u.id,l); S.likesTotal=(S.likesTotal||0)+e.likes; S.likeLog.push([performance.now(),e.likes]);
+  S.likeBank+=e.likes; while(S.likeBank>=LIKES_PER_APPLE){ S.likeBank-=LIKES_PER_APPLE; dropApples(1,u); floatText(`❤ ${LIKES_PER_APPLE} likes = 🍎`); }
   const now=performance.now(); for(let i=0;i<Math.min(12,e.likes);i++) S.hearts.push({t:now+i*90,x:900+Math.random()*120,d:.6+Math.random()*.6,s:26+Math.random()*22});
   if(now-(likeFeedAt.get(u.id)||0)>8000){ likeFeedAt.set(u.id,now); addEvent('like',u.avatar,`<span class="n">${esc(u.name)}</span> ❤ liked ×${l.likes}`); }
   sfx.like(); }
@@ -429,7 +462,7 @@ function handle(msg){
   }
 }
 function setConn(t){ const c=$('conn'); if(!t) return; c.classList.toggle('on',!!t.connected);
-  $('conn-t').textContent = t.connected?`LIVE @${t.username}`:(t.username?`@${t.username}: ${t.error||'connecting…'}`:'demo mode — G gift · B bomb · F follow · L like'); }
+  $('conn-t').textContent = t.connected?`LIVE @${t.username}`:(t.username?`@${t.username}: ${t.error||'connecting…'}`:'demo mode — G gift · B bomb · F follow · L like · K like storm'); }
 
 // ---------- round flow ----------
 function endRound(){
@@ -468,6 +501,13 @@ function loop(now){
     while(now-S.lastStep>=S.stepMs && S.phase==='play') step(S.lastStep+S.stepMs);
     if(now-S.roundStart>=ROUND_MS) endRound();
   }
+  // like rate over the last 60s -> heat 0..1 (smoothed)
+  const cut=now-60000; while(S.likeLog.length&&S.likeLog[0][0]<cut) S.likeLog.shift();
+  const rate=S.likeLog.reduce((a,[,n])=>a+n,0); const target=Math.max(0,Math.min(1,(rate-FIRE_START)/(FIRE_MAX-FIRE_START)));
+  S.heat+=(target-S.heat)*0.02; S.likeRate=rate;
+  if(S.heat>0.6&&Math.random()<0.02) S.hearts.push({t:now,x:100+Math.random()*880,d:.8,s:30});
+  // there is always at least one apple on the board
+  if(S.phase==='play'&&S.apples.size===0&&!S.pending.length) dropApples(1,null);
   if(S.phase==='play') drainPending();
   drawBoard(now); drawFx(now); updateHud(now);
   requestAnimationFrame(loop);
@@ -489,7 +529,7 @@ function fakeGift(){ const g=rnd([['Rose',1],['Rose',1],['Rose',1],['Finger Hear
   handle({type:'gift',user:fakeUser(),giftName:g[0],diamonds:g[1],count,coins:g[1]*count}); }
 addEventListener('keydown',e=>{ const k=e.key.toLowerCase();
   if(k==='g') fakeGift(); else if(k==='f') handle({type:'follow',user:fakeUser()}); else if(k==='l') handle({type:'like',user:fakeUser(),likes:1+Math.floor(Math.random()*20)});
-  else if(k==='c') handle({type:'chat',user:fakeUser(),text:rnd(['wow','HAH','OMG','🔥🔥🔥','more!'])}); else if(k==='b') handle({type:'bomb',user:fakeUser(),giftName:'GG',diamonds:1,count:1+Math.floor(Math.random()*20),coins:1,power:1+Math.floor(Math.random()*20)}); else if(k==='e') endRound(); });
+  else if(k==='c') handle({type:'chat',user:fakeUser(),text:rnd(['wow','HAH','OMG','🔥🔥🔥','more!'])}); else if(k==='k'){ for(let i=0;i<10;i++) handle({type:'like',user:fakeUser(),likes:15+Math.floor(Math.random()*15)}); } else if(k==='b') handle({type:'bomb',user:fakeUser(),giftName:'GG',diamonds:1,count:1+Math.floor(Math.random()*20),coins:1,power:1+Math.floor(Math.random()*20)}); else if(k==='e') endRound(); });
 if(new URLSearchParams(location.search).get('demo')==='1'){
   (function tick(){ const r=Math.random(); if(r<.3) fakeGift(); else if(r<.36) handle({type:'bomb',user:fakeUser(),giftName:'GG',diamonds:1,count:5,coins:5,power:5}); else if(r<.5) handle({type:'follow',user:fakeUser()}); else if(r<.85) handle({type:'like',user:fakeUser(),likes:1+Math.floor(Math.random()*20)}); else handle({type:'chat',user:fakeUser(),text:rnd(['wow','HAH','OMG','🔥'])});
     setTimeout(tick,600+Math.random()*2500); })();
