@@ -354,8 +354,8 @@ function drawBoard(now){
     for(let k=0;k<nEdge;k++){ const u=((k/nEdge)+now/15000)%1*per; let x,z; if(u<R-L){x=L+u;z=B;} else if(u<(R-L)+(B-T)){x=R;z=B-(u-(R-L));} else if(u<2*(R-L)+(B-T)){x=R-(u-(R-L)-(B-T));z=T;} else {x=L;z=T+(u-2*(R-L)-(B-T));}
       const rise=((now/900)+k*.37)%1; const f=1-rise; const y=rise*(1.2+2.5*H); const fl=Math.sin(now/60+k*3)*.15+.85;
       const col={r:1*f*fl,g:(.55-rise*.4)*f*fl,b:.05*f}; (k%2?big:small).push({x:x+Math.sin(now/300+k)*.15,y,z:z+Math.cos(now/280+k)*.15,...col}); }
-    if(H>0.45){ const nIn=Math.round((H-.45)*500); for(let k=0;k<nIn;k++){ const q=(k*7919%1000)/1000, w=(k*104729%1000)/1000; const rise=((now/1300)+q*3)%1; const f=(1-rise)*(H-.45)/.55;
-      (k%3?small:big).push({x:wx(0)-.5+q*COLS,y:.2+rise*3,z:wz(0)-.5+w*ROWS,r:f,g:.45*f,b:.03*f}); } } }
+    if(H>0.45){ const nIn=Math.round((H-.45)*500); for(let k=0;k<nIn;k++){ const q=(Math.sin(k*12.9898)*43758.5453)%1, w=(Math.sin(k*78.233)*43758.5453)%1; const rise=((now/1300)+Math.abs(q)*3)%1; const f=(1-rise)*(H-.45)/.55;
+      (k%3?small:big).push({x:wx(0)-.5+Math.abs(q)*COLS,y:.2+rise*3,z:wz(0)-.5+Math.abs(w)*ROWS,r:f,g:.45*f,b:.03*f}); } } }
   fillPoints(fireBig,big); fillPoints(fireSmall,small);
   fireLight.intensity=H*80+ (H>0?Math.sin(now/70)*10*H:0); fieldMat.emissiveIntensity=surf.material.emissiveIntensity=H*.35;
   // camera shake
@@ -407,8 +407,8 @@ function drawFx(now){
   if(S.heat>0.05){ const H=S.heat; const g=fx.createRadialGradient(540,1000,500,540,1000,1100); g.addColorStop(0,'rgba(255,60,0,0)'); g.addColorStop(1,`rgba(255,60,0,${H*.45})`);
     fx.fillStyle=g; fx.fillRect(0,0,1080,1920);
     const lbl=H>0.85?'🔥🔥🔥 INFERNO 🔥🔥🔥':H>0.5?'🔥🔥 ON FIRE 🔥🔥':'🔥 HEATING UP'; fx.font=`bold ${36+H*20}px Orbitron`; fx.textAlign='center';
-    fx.fillStyle=`rgba(255,${180-H*120},40,${.6+H*.4})`; fx.shadowColor='#ff5000'; fx.shadowBlur=30; fx.fillText(lbl,540,1560+Math.sin(now/150)*4*H); fx.shadowBlur=0;
-    fx.font='24px Rajdhani'; fx.fillStyle='rgba(255,220,180,.8)'; fx.fillText(`${S.likeRate} likes / min`,540,1600); }
+    fx.fillStyle=`rgba(255,${180-H*120},40,${.6+H*.4})`; fx.shadowColor='#ff5000'; fx.shadowBlur=30; fx.fillText(lbl,540,1500+Math.sin(now/150)*4*H); fx.shadowBlur=0;
+    fx.font='24px Rajdhani'; fx.fillStyle='rgba(255,220,180,.8)'; fx.fillText(`${S.likeRate} likes / min`,540,1540); }
 }
 
 // ---------- sounds (synthesized, no files) ----------
