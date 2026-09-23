@@ -332,7 +332,7 @@ function drawBoard(now){
     pos.needsUpdate=true; tube.computeVertexNormals(); tailTip.position.copy(curve.getPointAt(0)); }
   snakeMesh.geometry=tube;
   { const L=curve.getLength(), rp=L/SKIN_PERIOD; skinTex.repeat.set(rp,1); const T=(S.traveled||0)+t; skinTex.offset.set((((T-L)/SKIN_PERIOD)%1+1)%1,0); }
-  const H=S.heat; snakeMat.emissive.setRGB(H*.25,H*.06,0);
+  const H=S.heat; snakeMat.emissive.setRGB(H*.45,H*.08,0); headMat.emissive.setRGB(H*.45,H*.08,0); tailTip.material.emissive.setRGB(H*.45,H*.08,0);
   // head + crown + avatar
   const hp=v3[v3.length-1], prev=v3[v3.length-2]||hp; headMesh.position.copy(hp); headMesh.position.y=.5;
   tmpP.copy(hp).sub(prev); if(tmpP.lengthSq()>1e-6){ const target=Math.atan2(tmpP.x,tmpP.z); let d=target-headYaw; d=Math.atan2(Math.sin(d),Math.cos(d)); headYaw+=d*Math.min(1,dt*14); }
@@ -411,7 +411,7 @@ function step(now){
   S.lastStep=now;
   // speed scales with pending apples to keep it dynamic
   const load=Math.min(1,(S.apples.size+S.pending.length)/60);
-  S.stepMs=STEP_MS_MAX-(STEP_MS_MAX-STEP_MS_MIN)*load;
+  S.stepMs=(STEP_MS_MAX-(STEP_MS_MAX-STEP_MS_MIN)*load)*(1-.45*S.heat); // on fire = up to ~1.8x faster
   if(S.len>=N-1) endRound();
 }
 
