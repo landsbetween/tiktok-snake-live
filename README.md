@@ -4,7 +4,7 @@ An auto-playing snake for vertical TikTok live streams. The snake follows a fixe
 trajectory around the board. Gifts drop apples onto the field (1 💎 = 1 🍎), a follow
 gives +1 🍎, every 50 likes drop one apple and there is always at least one apple on the board.
 A high like rate sets the board on fire (edges first, then the whole field at ~400 likes/min). Bomb gifts (GG, Fireworks, ... configurable) blow up the tail instead.
-The trajectory is a random maze generated fresh every round. Every round also picks a new snake skin (8 color/pattern themes) and a new fruit type (9 fruits); the skins and fruits lists sit at the top of the 3D code in `public/index.html`. The snake eats, grows, fills the board, then a Top Supporters / Top Likes
+The trajectory is a random maze generated fresh every round. Every round also picks a new map (7 worlds: Mystic Forest, Sunny Desert, Frozen Peaks, Lava Lands, Candy Land, Neon City, Green Meadow; force one with `?map=Candy%20Land`), a new snake skin (8 color/pattern themes) and a new fruit type (9 fruits); the skins and fruits lists sit at the top of the 3D code in `public/index.html`. The snake eats, grows, fills the board, then a Top Supporters / Top Likes
 leaderboard is shown and a new round starts.
 
 ## Run
@@ -15,7 +15,7 @@ node server.js <tiktok_username>     # e.g. node server.js mr.gd
 Open http://localhost:3000 or add it to OBS as a **Browser Source 1080×1920**.
 
 Without a username the game runs in demo mode: **G** gift, **F** follow, **L** like,
-**C** chat, **B** bomb, **K** like storm, **E** end round. The only sound is a real apple-bite crunch when the snake eats; in a normal browser click once to unlock audio (OBS plays automatically). Add `?fruit=Strawberries` (any fruit name) to force a fruit for testing. `http://localhost:3000/?demo=1` generates random events.
+**C** chat, **B** bomb, **K** like storm, **E** end round. Sounds: a real apple-bite crunch when the snake eats and "Thanks for the follow!" on every follow; in a normal browser click once to unlock audio (OBS plays automatically). Add `?fruit=Strawberries` (any fruit name) to force a fruit for testing. `http://localhost:3000/?demo=1` generates random events.
 
 ## Config (env)
 - `APPLES_PER_DIAMOND=1` — apples per diamond
