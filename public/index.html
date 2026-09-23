@@ -931,12 +931,8 @@ function countdown(){
 }
 function resetRound(){
   S.round++; S.len=START_LEN; S.grow=0; S.eaten=0; S.roundLikes.clear(); S.roundStart=performance.now(); S.lastStep=performance.now();
-  // new random trajectory; re-key apples from old path indices to new ones
-  const cells=[...S.apples].map(([idx,a])=>[path[idx],a]);
-  buildPath(); S.head=0; S.apples.clear();
-  for(const [cell,a] of cells) S.apples.set(idxOf.get(cell.c+','+cell.r),a);
-  // apples under the new snake go back to the queue
-  const occ=occupied(); for(const [idx,a] of [...S.apples]) if(occ.has(idx)){ S.apples.delete(idx); S.pending.unshift({user:a.user}); }
+  // new random trajectory; every round starts with an empty board (donated fruit does not carry over)
+  buildPath(); S.head=0; S.apples.clear(); S.pending.length=0; S.bulges=[]; S.shrink=0;
   newRoundLook();
   S.phase='play';
 }
