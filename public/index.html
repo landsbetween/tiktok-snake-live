@@ -332,7 +332,10 @@ function drawBoard(now){
     pos.needsUpdate=true; tube.computeVertexNormals(); tailTip.position.copy(curve.getPointAt(0)); }
   snakeMesh.geometry=tube;
   { const L=curve.getLength(), rp=L/SKIN_PERIOD; skinTex.repeat.set(rp,1); const T=(S.traveled||0)+t; skinTex.offset.set((((T-L)/SKIN_PERIOD)%1+1)%1,0); }
-  const H=S.heat; snakeMat.emissive.setRGB(H*.45,H*.08,0); headMat.emissive.setRGB(H*.45,H*.08,0); tailTip.material.emissive.setRGB(H*.45,H*.08,0);
+  const H=S.heat; { // fire snake: tint skin toward dark ember and add orange glow; head and tail tip match the body
+    const k=Math.min(1,H*1.4); snakeMat.color.setRGB(1,lerp(1,.3,k),lerp(1,.15,k)); snakeMat.emissive.setRGB(.5*k,.12*k,0);
+    headMat.color.setRGB(lerp(.16,.16,k),lerp(.65,.2,k),lerp(.85,.13,k)); headMat.emissive.setRGB(.5*k,.12*k,0);
+    tailTip.material.color.copy(headMat.color); tailTip.material.emissive.setRGB(.5*k,.12*k,0); }
   // head + crown + avatar
   const hp=v3[v3.length-1], prev=v3[v3.length-2]||hp; headMesh.position.copy(hp); headMesh.position.y=.5;
   tmpP.copy(hp).sub(prev); if(tmpP.lengthSq()>1e-6){ const target=Math.atan2(tmpP.x,tmpP.z); let d=target-headYaw; d=Math.atan2(Math.sin(d),Math.cos(d)); headYaw+=d*Math.min(1,dt*14); }
