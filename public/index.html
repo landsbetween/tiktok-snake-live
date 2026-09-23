@@ -273,18 +273,82 @@ function paintSkin(sk){ const W=256,H=128,g=skinCanvas.getContext('2d');
     g.fillStyle='rgba(255,255,255,.07)'; g.beginPath(); g.arc(x,y+2,4,0,Math.PI*2); g.fill(); }
   skinTex.needsUpdate=true; }
 let SKIN=SKINS[0]; const skinBase=new THREE.Color();
-// ---------- per-round fruits ----------
+// ---------- per-round fruits: shaped bodies (lathe profiles), painted skins, stems, leaves, crowns ----------
+const TAU=Math.PI*2;
+function canvasTex(W,H,paint,srgb=true){ const c=document.createElement('canvas'); c.width=W; c.height=H; paint(c.getContext('2d'),W,H);
+  const t=new THREE.CanvasTexture(c); if(srgb) t.colorSpace=THREE.SRGBColorSpace; t.wrapS=THREE.RepeatWrapping; t.anisotropy=8; return t; }
+const rr=(a,b)=>a+Math.random()*(b-a);
+// profile: returns [x,y] points from bottom (x=0) to top (x=0); lathe spins them around Y
+function lathe(fn,steps=28,segs=32){ const pts=[]; for(let i=0;i<=steps;i++){ const th=i/steps*Math.PI; const [x,y]=fn(th); pts.push(new THREE.Vector2(Math.max(0.0005,x),y)); }
+  const g=new THREE.LatheGeometry(pts,segs); g.computeVertexNormals(); return g; }
+function noisePaint(g,W,H,base,dots,dotCol,rMin,rMax,alpha){ g.fillStyle=base; g.fillRect(0,0,W,H);
+  for(let i=0;i<dots;i++){ g.fillStyle=dotCol.replace('A',(alpha*Math.random()).toFixed(3)); g.beginPath(); g.arc(Math.random()*W,Math.random()*H,rr(rMin,rMax),0,TAU); g.fill(); } }
+const vGrad=(g,W,H,stops)=>{ const gr=g.createLinearGradient(0,0,0,H); stops.forEach(([o,c])=>gr.addColorStop(o,c)); g.fillStyle=gr; g.fillRect(0,0,W,H); };
+
+// leaf, calyx (star crown) and stem geometries
+const leafGeo=(()=>{ const s=new THREE.Shape(); s.moveTo(0,0); s.bezierCurveTo(.09,.05,.1,.2,0,.3); s.bezierCurveTo(-.1,.2,-.09,.05,0,0);
+  const g=new THREE.ShapeGeometry(s,10); const p=g.attributes.position, uv=g.attributes.uv;
+  for(let i=0;i<p.count;i++){ const x=p.getX(i), y=p.getY(i); p.setZ(i,-Math.pow(y/.3,2)*.06 + Math.abs(x)*.25); uv.setXY(i,x/.2+.5,y/.3); } // curl + fold along midrib
+  g.rotateX(-Math.PI/2+.5); g.computeVertexNormals(); return g; })();
+function calyxGeo(points,rOut,rIn){ const s=new THREE.Shape(); for(let i=0;i<=points*2;i++){ const a=i/(points*2)*TAU, r=i%2?rIn:rOut; const x=Math.cos(a)*r, y=Math.sin(a)*r; i?s.lineTo(x,y):s.moveTo(x,y); }
+  const g=new THREE.ShapeGeometry(s); const p=g.attributes.position, uv=g.attributes.uv;
+  for(let i=0;i<p.count;i++){ const x=p.getX(i), y=p.getY(i), d=Math.hypot(x,y); p.setZ(i,-d*d*1.2); uv.setXY(i,x/(2*rOut)+.5,y/(2*rOut)+.5); } // droop outward
+  g.rotateX(-Math.PI/2); g.computeVertexNormals(); return g; }
+const stemGeo=(()=>{ const g=new THREE.CylinderGeometry(.018,.03,.18,8,4); g.translate(0,.09,0); const p=g.attributes.position; for(let i=0;i<p.count;i++){ const y=p.getY(i); p.setX(i,p.getX(i)+y*y*1.2); } g.computeVertexNormals(); return g; })();
+const leafTex=canvasTex(64,64,(g,W,H)=>{ vGrad(g,W,H,[[0,'#2f9e44'],[1,'#8be07a']]); g.strokeStyle='rgba(20,80,30,.8)'; g.lineWidth=3; g.beginPath(); g.moveTo(W/2,H); g.lineTo(W/2,0); g.stroke();
+  g.lineWidth=1.5; for(let y=10;y<H;y+=10){ g.beginPath(); g.moveTo(W/2,y); g.lineTo(W*.12,y-9); g.moveTo(W/2,y); g.lineTo(W*.88,y-9); g.stroke(); } });
+const calyxTex=canvasTex(64,64,(g,W,H)=>{ const gr=g.createRadialGradient(W/2,H/2,2,W/2,H/2,W/2); gr.addColorStop(0,'#1f6b2a'); gr.addColorStop(1,'#5fcf5a'); g.fillStyle=gr; g.fillRect(0,0,W,H); });
+
 const FRUITS=[
-  {name:'Apples',      emoji:'🍎', color:0xff2f5e, emissive:0x5a0018, shape:[1,1,1],       size:1,   leaf:0x3ddc84, leafShape:[1.2,.5,.8], leafY:.3, rough:.35, burst:['#ff2f5e','#ffd166']},
-  {name:'Oranges',     emoji:'🍊', color:0xff8c1a, emissive:0x4a2000, shape:[1,.95,1],     size:1.02,leaf:0x2fae5a, leafShape:[1,.4,.7],   leafY:.3, rough:.75, burst:['#ff8c1a','#ffe0a0']},
-  {name:'Lemons',      emoji:'🍋', color:0xffe135, emissive:0x4a3a00, shape:[1.3,.88,.88], size:.95, leaf:0x3ddc84, leafShape:[.9,.4,.6],  leafY:.26,rough:.6,  burst:['#ffe135','#ffffff']},
-  {name:'Plums',       emoji:'🟣', color:0x7a2e8c, emissive:0x2a0035, shape:[1,1.05,1],    size:.9,  leaf:0x3ddc84, leafShape:[1.1,.45,.7], leafY:.28,rough:.25, burst:['#b060d0','#ffd6ff']},
-  {name:'Peaches',     emoji:'🍑', color:0xffa07a, emissive:0x4a1a00, shape:[1,.95,1],     size:1.05,leaf:0x3ddc84, leafShape:[1.3,.5,.8], leafY:.3, rough:.85, burst:['#ffa07a','#fff0d0']},
-  {name:'Strawberries',emoji:'🍓', color:0xe8202a, emissive:0x4a0008, shape:[.85,1.15,.85],size:1,   leaf:0x2fae3a, leafShape:[2,.35,2],   leafY:.3, rough:.5,  burst:['#e8202a','#ffffff']},
-  {name:'Blueberries', emoji:'🫐', color:0x3b4cc0, emissive:0x0a1040, shape:[1,.9,1],      size:.8,  leaf:0x1a2a70, leafShape:[.9,.4,.9],  leafY:.24,rough:.3,  burst:['#5a6ce0','#d0d8ff']},
-  {name:'Watermelons', emoji:'🍉', color:0x2e8b3a, emissive:0x082a0c, shape:[1.25,1,1],    size:1.1, leaf:0x7a5a2a, leafShape:[.4,.8,.4], leafY:.32,rough:.4,  burst:['#ff4060','#2e8b3a']},
-  {name:'Limes',       emoji:'🍈', color:0x7ad13a, emissive:0x1a3a00, shape:[1.1,.95,.95], size:.9,  leaf:0x2f8a3a, leafShape:[.9,.4,.6],  leafY:.27,rough:.6,  burst:['#9be35a','#ffffff']},
+  {name:'Apples', emoji:'🍎', burst:['#ff2f5e','#ffd166'], rough:.35, clearcoat:.6, size:1,
+   geo:()=>lathe(th=>{ const R=.31; let x=R*Math.sin(th)*(1-.1*(1-th/Math.PI)), y=-R*.92*Math.cos(th); y-=.09*Math.exp(-Math.pow((Math.PI-th)/.32,2)); y+=.03*Math.exp(-Math.pow(th/.3,2)); return [x,y]; }),
+   tex:()=>canvasTex(256,128,(g,W,H)=>{ vGrad(g,W,H,[[0,'#ffd84a'],[.25,'#e0283c'],[.7,'#c8102e'],[1,'#8e0a22']]);
+     for(let i=0;i<70;i++){ const x=Math.random()*W; g.strokeStyle=`rgba(255,${rr(120,200)|0},80,${rr(.1,.3)})`; g.lineWidth=rr(1,3); g.beginPath(); g.moveTo(x,rr(10,40)); g.lineTo(x+rr(-4,4),rr(60,120)); g.stroke(); }
+     for(let i=0;i<120;i++){ g.fillStyle='rgba(255,240,200,.35)'; g.beginPath(); g.arc(Math.random()*W,Math.random()*H,1,0,TAU); g.fill(); } }),
+   top:.19, stem:0x6b4423, leaf:'leaf'},
+  {name:'Oranges', emoji:'🍊', burst:['#ff8c1a','#ffe0a0'], rough:.8, clearcoat:.2, size:1.02,
+   geo:()=>lathe(th=>[.31*Math.sin(th), -.29*Math.cos(th)]),
+   tex:()=>canvasTex(256,128,(g,W,H)=>{ noisePaint(g,W,H,'#ff8a14',1600,'rgba(180,70,0,A)',.8,2.2,.5); g.fillStyle='rgba(255,200,90,.25)'; g.fillRect(0,0,W,H*.35); }),
+   bump:()=>canvasTex(256,128,(g,W,H)=>noisePaint(g,W,H,'#ffffff',2200,'rgba(0,0,0,A)',.8,2,.8),false), bumpScale:1.5,
+   top:.28, stem:0x4f7a28, stemScale:.5, leaf:'leaf', leafScale:.8},
+  {name:'Lemons', emoji:'🍋', burst:['#ffe135','#ffffff'], rough:.6, clearcoat:.3, size:.95, horizontal:true,
+   geo:()=>lathe(th=>{ const k=Math.exp(-Math.pow(th/.28,2))+Math.exp(-Math.pow((Math.PI-th)/.28,2)); return [.25*Math.sin(th)*(1-.25*k*0), -.32*Math.cos(th)*(1+.18*k)]; }),
+   tex:()=>canvasTex(256,128,(g,W,H)=>{ noisePaint(g,W,H,'#ffe23a',1200,'rgba(190,150,0,A)',.8,2,.45); vGrad; g.fillStyle='rgba(160,200,40,.25)'; g.fillRect(0,0,W,10); g.fillRect(0,H-10,W,10); }),
+   bump:()=>canvasTex(256,128,(g,W,H)=>noisePaint(g,W,H,'#ffffff',2000,'rgba(0,0,0,A)',.8,2,.7),false), bumpScale:1.2,
+   top:.25, stem:null, leaf:null},
+  {name:'Plums', emoji:'🟣', burst:['#b060d0','#ffd6ff'], rough:.4, clearcoat:.2, size:.9,
+   geo:()=>lathe(th=>{ let y=-.32*Math.cos(th); y-=.05*Math.exp(-Math.pow((Math.PI-th)/.3,2)); return [.28*Math.sin(th), y]; }),
+   tex:()=>canvasTex(256,128,(g,W,H)=>{ vGrad(g,W,H,[[0,'#4a1560'],[.5,'#7a2e8c'],[1,'#3a0c4a']]); for(let i=0;i<500;i++){ g.fillStyle=`rgba(210,190,255,${rr(.05,.18)})`; g.beginPath(); g.arc(Math.random()*W,Math.random()*H,rr(2,6),0,TAU); g.fill(); }
+     g.strokeStyle='rgba(40,0,50,.6)'; g.lineWidth=3; g.beginPath(); g.moveTo(W*.25,0); g.lineTo(W*.25,H); g.stroke(); }),
+   top:.22, stem:0x5a3a1a, leaf:null},
+  {name:'Peaches', emoji:'🍑', burst:['#ffa07a','#fff0d0'], rough:.95, clearcoat:0, size:1.05,
+   geo:()=>lathe(th=>{ let y=-.3*Math.cos(th); y-=.05*Math.exp(-Math.pow((Math.PI-th)/.3,2)); return [.31*Math.sin(th)*(1+.04*Math.sin(3*th)), y]; }),
+   tex:()=>canvasTex(256,128,(g,W,H)=>{ vGrad(g,W,H,[[0,'#ffcf8a'],[1,'#ffb37a']]); const gr=g.createRadialGradient(W*.6,H*.45,5,W*.6,H*.45,W*.35); gr.addColorStop(0,'rgba(230,40,60,.85)'); gr.addColorStop(1,'rgba(230,40,60,0)'); g.fillStyle=gr; g.fillRect(0,0,W,H);
+     g.fillStyle=gr; g.save(); g.translate(-W,0); g.fillRect(W,0,W,H); g.restore(); g.strokeStyle='rgba(170,60,40,.55)'; g.lineWidth=4; g.beginPath(); g.moveTo(W*.1,0); g.bezierCurveTo(W*.13,H*.4,W*.07,H*.7,W*.1,H); g.stroke(); }),
+   top:.2, stem:0x5a3a1a, leaf:'leaf'},
+  {name:'Strawberries', emoji:'🍓', burst:['#e8202a','#ffffff'], rough:.45, clearcoat:.7, size:1,
+   geo:()=>lathe(th=>{ const t=th/Math.PI; return [.3*Math.pow(Math.sin(th),.8)*(.45+.55*t), -.34*Math.cos(th)+.02]; }),
+   tex:()=>canvasTex(256,128,(g,W,H)=>{ vGrad(g,W,H,[[0,'#b80d1c'],[.7,'#ee2a36'],[1,'#ff6a55']]);
+     for(let r=6;r<H-8;r+=12) for(let c=((r/12)%2)*8;c<W;c+=16){ g.fillStyle='rgba(120,0,10,.5)'; g.beginPath(); g.ellipse(c,r,3.2,4,0,0,TAU); g.fill(); g.fillStyle='#ffe28a'; g.beginPath(); g.ellipse(c,r-.5,1.5,2.4,0,0,TAU); g.fill(); } }),
+   top:.34, stem:0x3f8a2a, stemScale:.6, leaf:'calyx', calyx:[7,.3,.09]},
+  {name:'Blueberries', emoji:'🫐', burst:['#5a6ce0','#d0d8ff'], rough:.55, clearcoat:.1, size:.85,
+   geo:()=>lathe(th=>{ let y=-.25*Math.cos(th); y-=.05*Math.exp(-Math.pow((Math.PI-th)/.35,2)); return [.29*Math.sin(th), y]; }),
+   tex:()=>canvasTex(256,128,(g,W,H)=>{ vGrad(g,W,H,[[0,'#1f2a7a'],[.5,'#3b4cc0'],[1,'#27317e']]); for(let i=0;i<700;i++){ g.fillStyle=`rgba(200,215,255,${rr(.05,.2)})`; g.beginPath(); g.arc(Math.random()*W,Math.random()*H,rr(1.5,5),0,TAU); g.fill(); } }),
+   top:.2, stem:null, leaf:'calyx', calyx:[5,.1,.045], calyxCol:0x2a2f5a},
+  {name:'Watermelons', emoji:'🍉', burst:['#ff4060','#2e8b3a'], rough:.3, clearcoat:.6, size:1.12, horizontal:true,
+   geo:()=>lathe(th=>[.29*Math.sin(th), -.38*Math.cos(th)]),
+   tex:()=>canvasTex(256,256,(g,W,H)=>{ g.fillStyle='#8fcf6a'; g.fillRect(0,0,W,H); g.fillStyle='#1f6b2a';
+     for(let s=0;s<10;s++){ const x0=s*W/10; g.beginPath(); g.moveTo(x0,0); for(let y=0;y<=H;y+=8) g.lineTo(x0+Math.sin(y*.12+s)*4+ (y%16?3:-3),y); for(let y=H;y>=0;y-=8) g.lineTo(x0+13+Math.sin(y*.12+s)*4+(y%16?-3:3),y); g.closePath(); g.fill(); } }),
+   top:.38, stem:null, leaf:null},
+  {name:'Limes', emoji:'🍈', burst:['#9be35a','#ffffff'], rough:.55, clearcoat:.3, size:.9,
+   geo:()=>lathe(th=>{ const k=Math.exp(-Math.pow((Math.PI-th)/.25,2)); return [.28*Math.sin(th), -.29*Math.cos(th)*(1+.1*k)]; }),
+   tex:()=>canvasTex(256,128,(g,W,H)=>{ vGrad(g,W,H,[[0,'#9bd84a'],[.5,'#5fb52a'],[1,'#3f8f1a']]); for(let i=0;i<1400;i++){ g.fillStyle=`rgba(210,255,150,${rr(.05,.25)})`; g.beginPath(); g.arc(Math.random()*W,Math.random()*H,rr(.7,1.8),0,TAU); g.fill(); } }),
+   bump:()=>canvasTex(256,128,(g,W,H)=>noisePaint(g,W,H,'#ffffff',1800,'rgba(0,0,0,A)',.7,1.8,.7),false), bumpScale:1,
+   top:.31, stem:0x4f6a28, stemScale:.4, leaf:null},
 ];
+// build geometry/textures once
+for(const F of FRUITS){ const g=F.geo(); if(F.horizontal) g.rotateZ(Math.PI/2); F.g=g; F.map=F.tex(); F.bumpMap=F.bump?F.bump():null;
+  F.calyxG=F.leaf==='calyx'?calyxGeo(...F.calyx):null; if(F.horizontal) F.top=0; }
 let FRUIT=FRUITS[0];
 const pickOther=(arr,cur)=>{ let x; do{ x=arr[Math.floor(Math.random()*arr.length)]; } while(arr.length>1&&x===cur); return x; };
 
@@ -326,15 +390,20 @@ function updateAvatar(ts){
 
 // apples (instanced)
 const MAXA=N+64;
-const appleMesh=new THREE.InstancedMesh(new THREE.SphereGeometry(.3,18,14),new THREE.MeshStandardMaterial({color:0xff2f5e,roughness:.35,emissive:0x5a0018,emissiveIntensity:.4}),MAXA); appleMesh.castShadow=true; scene.add(appleMesh);
-const leafMesh=new THREE.InstancedMesh(new THREE.SphereGeometry(.16,10,8),new THREE.MeshStandardMaterial({color:0x3ddc84,roughness:.6}),MAXA); scene.add(leafMesh);
+const appleMesh=new THREE.InstancedMesh(FRUITS[0].g,new THREE.MeshPhysicalMaterial({map:FRUITS[0].map,roughness:.4,clearcoat:.5,clearcoatRoughness:.35}),MAXA); appleMesh.castShadow=true; appleMesh.receiveShadow=true; scene.add(appleMesh);
+const stemMesh=new THREE.InstancedMesh(stemGeo,new THREE.MeshStandardMaterial({color:0x6b4423,roughness:.8}),MAXA); stemMesh.castShadow=true; scene.add(stemMesh);
+const leafMesh=new THREE.InstancedMesh(leafGeo,new THREE.MeshStandardMaterial({map:leafTex,side:THREE.DoubleSide,roughness:.6}),MAXA); leafMesh.castShadow=true; scene.add(leafMesh);
+for(const m of [appleMesh,stemMesh,leafMesh]) m.frustumCulled=false;
 function applyLook(){
   paintSkin(SKIN); skinBase.set(SKIN.base); headMat.color.copy(skinBase); tailTip.material.color.copy(skinBase);
   topMark.material.color.set(SKIN.dark); eyeMat.color.setHex(SKIN.eye);
-  appleMesh.material.color.setHex(FRUIT.color); appleMesh.material.emissive.setHex(FRUIT.emissive); appleMesh.material.roughness=FRUIT.rough; leafMesh.material.color.setHex(FRUIT.leaf); }
+  const F=FRUIT, m=appleMesh.material; appleMesh.geometry=F.g; m.map=F.map; m.bumpMap=F.bumpMap; m.bumpScale=F.bumpScale||1; m.roughness=F.rough; m.clearcoat=F.clearcoat; m.needsUpdate=true;
+  stemMesh.visible=!!F.stem; if(F.stem) stemMesh.material.color.setHex(F.stem);
+  leafMesh.visible=!!F.leaf; if(F.leaf==='leaf'){ leafMesh.geometry=leafGeo; leafMesh.material.map=leafTex; leafMesh.material.color.setHex(0xffffff); }
+  else if(F.leaf==='calyx'){ leafMesh.geometry=F.calyxG; leafMesh.material.map=calyxTex; leafMesh.material.color.setHex(F.calyxCol||0xffffff); } leafMesh.material.needsUpdate=true; }
 function newRoundLook(){ SKIN=pickOther(SKINS,SKIN); FRUIT=pickOther(FRUITS,FRUIT); applyLook();
   S.banner={txt:`${SKIN.name} · ${FRUIT.emoji} ${FRUIT.name}`,t:performance.now(),col:SKIN.light}; }
-const shadowMesh=new THREE.InstancedMesh(new THREE.CircleGeometry(.3,16),new THREE.MeshBasicMaterial({color:0x000000,transparent:true,opacity:.35,depthWrite:false}),MAXA); scene.add(shadowMesh);
+const shadowMesh=new THREE.InstancedMesh(new THREE.CircleGeometry(.3,16),new THREE.MeshBasicMaterial({color:0x000000,transparent:true,opacity:.35,depthWrite:false}),MAXA); scene.add(shadowMesh); shadowMesh.frustumCulled=false;
 
 // particles + fire (points)
 const softTex=(()=>{ const c=document.createElement('canvas'); c.width=c.height=64; const g=c.getContext('2d'); const r=g.createRadialGradient(32,32,0,32,32,32); r.addColorStop(0,'rgba(255,255,255,1)'); r.addColorStop(.4,'rgba(255,255,255,.5)'); r.addColorStop(1,'rgba(255,255,255,0)'); g.fillStyle=r; g.fillRect(0,0,64,64); return new THREE.CanvasTexture(c); })();
@@ -418,9 +487,12 @@ function drawBoard(now){
   const bounce=t=>{ const n=7.5625,d=2.75; if(t<1/d) return n*t*t; if(t<2/d) return n*(t-=1.5/d)*t+.75; if(t<2.5/d) return n*(t-=2.25/d)*t+.9375; return n*(t-=2.625/d)*t+.984375; };
   const putApple=(x,y,z,sx,sy,spin,tilt,shadowK)=>{
     E.set(tilt,spin,tilt*.6); tmpQ.setFromEuler(E);
-    const F=FRUIT, fs=F.size; tmpS.set(sx*F.shape[0]*fs,sy*F.shape[1]*fs,sx*F.shape[2]*fs); tmpM.compose(tmpP.set(x,y,z),tmpQ,tmpS); appleMesh.setMatrixAt(i,tmpM);
-    leafOff.set(.06*sx,F.leafY*sy*F.shape[1]*fs,0).applyQuaternion(tmpQ); lq.copy(tmpQ);
-    tmpS.set(F.leafShape[0]*sx*fs,F.leafShape[1]*sy*fs,F.leafShape[2]*sx*fs); tmpM.compose(tmpP.set(x+leafOff.x,y+leafOff.y,z+leafOff.z),lq,tmpS); leafMesh.setMatrixAt(i,tmpM);
+    const F=FRUIT, fs=F.size; tmpS.set(sx*fs,sy*fs,sx*fs); tmpM.compose(tmpP.set(x,y,z),tmpQ,tmpS); appleMesh.setMatrixAt(i,tmpM);
+    const topY=F.top*sy*fs;
+    if(F.stem){ leafOff.set(0,topY-.03,0).applyQuaternion(tmpQ); const ss=fs*(F.stemScale||1); tmpS.set(ss,ss,ss); tmpM.compose(tmpP.set(x+leafOff.x,y+leafOff.y,z+leafOff.z),tmpQ,tmpS); stemMesh.setMatrixAt(i,tmpM); }
+    if(F.leaf==='leaf'){ leafOff.set(.03,topY+.02,0).applyQuaternion(tmpQ); lq.setFromAxisAngle(tmpP.set(0,1,0),.9); lq.premultiply(tmpQ); const ls=fs*(F.leafScale||1)*1.25; tmpS.set(ls,ls,ls);
+      tmpM.compose(tmpP.set(x+leafOff.x,y+leafOff.y,z+leafOff.z),lq,tmpS); leafMesh.setMatrixAt(i,tmpM); }
+    else if(F.leaf==='calyx'){ leafOff.set(0,topY-.015,0).applyQuaternion(tmpQ); tmpS.set(fs,fs,fs); tmpM.compose(tmpP.set(x+leafOff.x,y+leafOff.y,z+leafOff.z),tmpQ,tmpS); leafMesh.setMatrixAt(i,tmpM); }
     tmpM.makeRotationX(-Math.PI/2); tmpM.scale(tmpS.set(shadowK,shadowK,1)); tmpM.setPosition(x,.02,z); shadowMesh.setMatrixAt(i,tmpM); i++; };
   for(const [idx,a] of S.apples){ const p=path[idx]; const x=cx(p), z=cy(p); const age=(now-a.born)/1000;
     const DROP=.7; let y, sx=1, sy=1;
@@ -429,7 +501,7 @@ function drawBoard(now){
     else { const t=now/1000+idx*.37; y=.3+Math.abs(Math.sin(t*2.4))*.12; const land=Math.max(0,.12-Math.abs(Math.sin(t*2.4)))/.12; sy=1-land*.12; sx=1+land*.07; }
     const spin=now/900+idx; const tilt=Math.sin(now/500+idx)*.12;
     putApple(x,y,z,sx,sy,spin,tilt,Math.max(.4,1-(y-.3)*.15)); }
-  appleMesh.count=leafMesh.count=shadowMesh.count=i; appleMesh.instanceMatrix.needsUpdate=leafMesh.instanceMatrix.needsUpdate=shadowMesh.instanceMatrix.needsUpdate=true;
+  appleMesh.count=leafMesh.count=stemMesh.count=shadowMesh.count=i; appleMesh.instanceMatrix.needsUpdate=leafMesh.instanceMatrix.needsUpdate=stemMesh.instanceMatrix.needsUpdate=shadowMesh.instanceMatrix.needsUpdate=true;
   // particles
   const live=[]; for(const p of S.particles){ const a=1-(now-p.t)/700; if(a<=0||a>1) continue; p.x+=p.vx*dt; p.y+=p.vy*dt; p.z+=p.vz*dt; p.vy-=9*dt; if(p.y<.05){ p.y=.05; p.vy*=-.4; }
     live.push({x:p.x,y:p.y,z:p.z,r:p.col[0]*a,g:p.col[1]*a,b:p.col[2]*a}); }
@@ -519,6 +591,8 @@ const sfx=(()=>{
   const bites=[]; let lastBite=0, bitesLoading=false;
   function loadBites(){ if(bitesLoading) return; bitesLoading=true; const a=ctx();
     [1,2,3,4].forEach((n,i)=>fetch(`sounds/bite${n}.mp3`).then(r=>r.arrayBuffer()).then(b=>a.decodeAudioData(b)).then(buf=>bites[i]=buf).catch(()=>{})); }
+  // only the bite sound is used; everything else is silent
+  const mute=()=>{};
   return {
     unlock: safe(()=>{ ctx(); loadBites(); }),
     eat:    safe(()=>{ // real apple-bite samples, random pick + slight pitch variation
@@ -527,14 +601,14 @@ const sfx=(()=>{
       if(!ready.length){ noise(.05,.9,0,2500); tone(180,.06,'triangle',.5,-100); return; }
       const src=a.createBufferSource(); src.buffer=ready[Math.floor(Math.random()*ready.length)]; src.playbackRate.value=.92+Math.random()*.2;
       const g=a.createGain(); g.gain.value=.9; src.connect(g); g.connect(master); src.start(); }),
-    drop:   safe(()=>{ tone(220,.12,'triangle',.4,-120); noise(.06,.15,0,800); }),
-    gift:   safe(big=>{ [523,659,784,1046].forEach((f,i)=>tone(f,.25,'triangle',.5,0,i*.08)); if(big){ [1046,1318,1568].forEach((f,i)=>tone(f,.5,'sine',.5,0,.4+i*.1)); } }),
-    like:   safe(()=>{ tone(1500,.06,'sine',.25,400); }),
-    follow: safe(()=>{ const a=new Audio('sounds/follow.mp3'); a.volume=.8; a.play().catch(()=>{ tone(880,.15,'sine',.5,0,0); tone(1320,.25,'sine',.5,0,.12); }); }),
-    explode:safe(()=>{ noise(.6,.9,0,600); tone(90,.5,'sawtooth',.6,-60); }),
-    tick:   safe(()=>{ tone(880,.1,'square',.35); }),
-    go:     safe(()=>{ tone(1320,.4,'square',.4); }),
-    end:    safe(()=>{ [784,659,523,392].forEach((f,i)=>tone(f,.35,'triangle',.5,0,i*.15)); }),
+    drop: mute,
+    gift: mute,
+    like: mute,
+    follow: mute,
+    explode: mute,
+    tick: mute,
+    go: mute,
+    end: mute,
   };
 })();
 addEventListener('pointerdown',sfx.unlock,{once:true}); addEventListener('keydown',sfx.unlock,{once:true}); sfx.unlock();
@@ -657,7 +731,7 @@ function loop(now){
   drawBoard(now); drawFx(now); updateHud(now);
   requestAnimationFrame(loop);
 }
-SKIN=SKINS[Math.floor(Math.random()*SKINS.length)]; FRUIT=FRUITS[Math.floor(Math.random()*FRUITS.length)]; applyLook();
+SKIN=SKINS[Math.floor(Math.random()*SKINS.length)]; FRUIT=FRUITS.find(f=>f.name===new URLSearchParams(location.search).get('fruit'))||FRUITS[Math.floor(Math.random()*FRUITS.length)]; applyLook();
 S.lastStep=performance.now(); requestAnimationFrame(loop);
 
 // ---------- websocket ----------
