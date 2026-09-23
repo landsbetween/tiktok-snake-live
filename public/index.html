@@ -246,14 +246,48 @@ const gridTex=(()=>{ const c=document.createElement('canvas'); c.width=COLS*64; 
 const surf=new THREE.Mesh(new THREE.PlaneGeometry(COLS,ROWS),new THREE.MeshStandardMaterial({map:gridTex,roughness:.9,emissive:0xff4400,emissiveIntensity:0}));
 surf.rotation.x=-Math.PI/2; surf.position.y=0.01; surf.receiveShadow=true; scene.add(surf);
 // snake
-// skin texture: scales + dark diamond bands, repeats along the body
-const skinTex=(()=>{ const W=256,H=128,c=document.createElement('canvas'); c.width=W; c.height=H; const g=c.getContext('2d');
-  g.fillStyle='#2aa6d8'; g.fillRect(0,0,W,H);
-  g.fillStyle='#124f78'; for(const cy of [H*.25,H*.75]){ g.beginPath(); g.moveTo(W*.5,cy-H*.22); g.lineTo(W*.85,cy); g.lineTo(W*.5,cy+H*.22); g.lineTo(W*.15,cy); g.closePath(); g.fill(); }
-  g.fillStyle='#9ef0ff'; for(const cy of [H*.25,H*.75]){ g.beginPath(); g.moveTo(W*.5,cy-H*.09); g.lineTo(W*.64,cy); g.lineTo(W*.5,cy+H*.09); g.lineTo(W*.36,cy); g.closePath(); g.fill(); }
-  for(let y=0;y<H;y+=10) for(let x=(y/10%2)*8;x<W;x+=16){ g.strokeStyle='rgba(0,20,40,.28)'; g.lineWidth=1.5; g.beginPath(); g.arc(x,y,8,0,Math.PI); g.stroke();
-    g.fillStyle='rgba(255,255,255,.06)'; g.beginPath(); g.arc(x,y+2,4,0,Math.PI*2); g.fill(); }
-  const t=new THREE.CanvasTexture(c); t.colorSpace=THREE.SRGBColorSpace; t.wrapS=t.wrapT=THREE.RepeatWrapping; t.anisotropy=8; return t; })();
+// ---------- per-round snake skins ----------
+const SKINS=[
+  {name:'Ocean Python',   base:'#2aa6d8', dark:'#124f78', light:'#9ef0ff', pattern:'diamond', eye:0xffd23f},
+  {name:'Jungle Viper',   base:'#3fae4a', dark:'#1d5a23', light:'#c8f07a', pattern:'spots',   eye:0xff9f1a},
+  {name:'Coral Snake',    base:'#e8322f', dark:'#141414', light:'#ffd23f', pattern:'rings',   eye:0xffffff},
+  {name:'Golden Cobra',   base:'#e5b53a', dark:'#5a3a0a', light:'#fff1a8', pattern:'bands',   eye:0x2ee6a0},
+  {name:'Royal Serpent',  base:'#8a4fd8', dark:'#3a1670', light:'#f0b8ff', pattern:'zigzag',  eye:0x7ff3ff},
+  {name:'Candy Snake',    base:'#ff6fb5', dark:'#b8236e', light:'#ffffff', pattern:'stripes', eye:0x7ff3ff},
+  {name:'Shadow Mamba',   base:'#3b4250', dark:'#12151b', light:'#7ff3ff', pattern:'zigzag',  eye:0xff2f5e},
+  {name:'Desert Boa',     base:'#c98a4b', dark:'#5e3417', light:'#f3d3a2', pattern:'diamond', eye:0xffd23f},
+];
+const skinCanvas=document.createElement('canvas'); skinCanvas.width=256; skinCanvas.height=128;
+const skinTex=new THREE.CanvasTexture(skinCanvas); skinTex.colorSpace=THREE.SRGBColorSpace; skinTex.wrapS=skinTex.wrapT=THREE.RepeatWrapping; skinTex.anisotropy=8;
+function paintSkin(sk){ const W=256,H=128,g=skinCanvas.getContext('2d');
+  g.fillStyle=sk.base; g.fillRect(0,0,W,H);
+  const dia=(cx,cy,rx,ry,col)=>{ g.fillStyle=col; g.beginPath(); g.moveTo(cx,cy-ry); g.lineTo(cx+rx,cy); g.lineTo(cx,cy+ry); g.lineTo(cx-rx,cy); g.closePath(); g.fill(); };
+  if(sk.pattern==='diamond'){ for(const cy of [H*.25,H*.75]){ dia(W*.5,cy,W*.35,H*.22,sk.dark); dia(W*.5,cy,W*.14,H*.09,sk.light); } }
+  else if(sk.pattern==='spots'){ for(const [x,y,r] of [[40,30,22],[150,90,26],[210,25,16],[90,100,14],[250,70,12],[5,80,14]]){ g.fillStyle=sk.dark; g.beginPath(); g.arc(x,y,r,0,7); g.fill(); g.fillStyle=sk.light; g.beginPath(); g.arc(x,y,r*.45,0,7); g.fill(); } }
+  else if(sk.pattern==='rings'){ g.fillStyle=sk.dark; g.fillRect(W*.1,0,W*.3,H); g.fillStyle=sk.light; g.fillRect(W*.4,0,W*.1,H); g.fillRect(0,0,W*.1,H); }
+  else if(sk.pattern==='bands'){ g.fillStyle=sk.dark; g.fillRect(W*.15,0,W*.18,H); g.fillRect(W*.62,0,W*.18,H); g.fillStyle=sk.light; g.fillRect(W*.33,0,W*.04,H); g.fillRect(W*.8,0,W*.04,H); }
+  else if(sk.pattern==='zigzag'){ g.strokeStyle=sk.dark; g.lineWidth=22; g.lineJoin='miter'; for(const y0 of [H*.25,H*.75]){ g.beginPath(); for(let x=-32;x<=W+32;x+=32) g.lineTo(x,y0+((x/32)%2?-18:18)); g.stroke(); }
+    g.strokeStyle=sk.light; g.lineWidth=5; for(const y0 of [H*.25,H*.75]){ g.beginPath(); for(let x=-32;x<=W+32;x+=32) g.lineTo(x,y0+((x/32)%2?-18:18)); g.stroke(); } }
+  else if(sk.pattern==='stripes'){ for(let y=0;y<H;y+=32){ g.fillStyle=sk.dark; g.fillRect(0,y,W,12); g.fillStyle=sk.light; g.fillRect(0,y+12,W,4); } }
+  for(let y=0;y<H;y+=10) for(let x=(y/10%2)*8;x<W;x+=16){ g.strokeStyle='rgba(0,0,0,.22)'; g.lineWidth=1.5; g.beginPath(); g.arc(x,y,8,0,Math.PI); g.stroke();
+    g.fillStyle='rgba(255,255,255,.07)'; g.beginPath(); g.arc(x,y+2,4,0,Math.PI*2); g.fill(); }
+  skinTex.needsUpdate=true; }
+let SKIN=SKINS[0]; const skinBase=new THREE.Color();
+// ---------- per-round fruits ----------
+const FRUITS=[
+  {name:'Apples',      emoji:'🍎', color:0xff2f5e, emissive:0x5a0018, shape:[1,1,1],       size:1,   leaf:0x3ddc84, leafShape:[1.2,.5,.8], leafY:.3, rough:.35, burst:['#ff2f5e','#ffd166']},
+  {name:'Oranges',     emoji:'🍊', color:0xff8c1a, emissive:0x4a2000, shape:[1,.95,1],     size:1.02,leaf:0x2fae5a, leafShape:[1,.4,.7],   leafY:.3, rough:.75, burst:['#ff8c1a','#ffe0a0']},
+  {name:'Lemons',      emoji:'🍋', color:0xffe135, emissive:0x4a3a00, shape:[1.3,.88,.88], size:.95, leaf:0x3ddc84, leafShape:[.9,.4,.6],  leafY:.26,rough:.6,  burst:['#ffe135','#ffffff']},
+  {name:'Plums',       emoji:'🟣', color:0x7a2e8c, emissive:0x2a0035, shape:[1,1.05,1],    size:.9,  leaf:0x3ddc84, leafShape:[1.1,.45,.7], leafY:.28,rough:.25, burst:['#b060d0','#ffd6ff']},
+  {name:'Peaches',     emoji:'🍑', color:0xffa07a, emissive:0x4a1a00, shape:[1,.95,1],     size:1.05,leaf:0x3ddc84, leafShape:[1.3,.5,.8], leafY:.3, rough:.85, burst:['#ffa07a','#fff0d0']},
+  {name:'Strawberries',emoji:'🍓', color:0xe8202a, emissive:0x4a0008, shape:[.85,1.15,.85],size:1,   leaf:0x2fae3a, leafShape:[2,.35,2],   leafY:.3, rough:.5,  burst:['#e8202a','#ffffff']},
+  {name:'Blueberries', emoji:'🫐', color:0x3b4cc0, emissive:0x0a1040, shape:[1,.9,1],      size:.8,  leaf:0x1a2a70, leafShape:[.9,.4,.9],  leafY:.24,rough:.3,  burst:['#5a6ce0','#d0d8ff']},
+  {name:'Watermelons', emoji:'🍉', color:0x2e8b3a, emissive:0x082a0c, shape:[1.25,1,1],    size:1.1, leaf:0x7a5a2a, leafShape:[.4,.8,.4], leafY:.32,rough:.4,  burst:['#ff4060','#2e8b3a']},
+  {name:'Limes',       emoji:'🍈', color:0x7ad13a, emissive:0x1a3a00, shape:[1.1,.95,.95], size:.9,  leaf:0x2f8a3a, leafShape:[.9,.4,.6],  leafY:.27,rough:.6,  burst:['#9be35a','#ffffff']},
+];
+let FRUIT=FRUITS[0];
+const pickOther=(arr,cur)=>{ let x; do{ x=arr[Math.floor(Math.random()*arr.length)]; } while(arr.length>1&&x===cur); return x; };
+
 const SKIN_PERIOD=1.6; // world units per pattern repeat
 const snakeMat=new THREE.MeshPhysicalMaterial({side:THREE.DoubleSide,map:skinTex,bumpMap:skinTex,bumpScale:.6,roughness:.35,metalness:.05,clearcoat:.8,clearcoatRoughness:.3,emissive:0x000000});
 const snakeMesh=new THREE.Mesh(new THREE.BufferGeometry(),snakeMat); snakeMesh.castShadow=true; snakeMesh.receiveShadow=true; scene.add(snakeMesh);
@@ -294,6 +328,12 @@ function updateAvatar(ts){
 const MAXA=N+64;
 const appleMesh=new THREE.InstancedMesh(new THREE.SphereGeometry(.3,18,14),new THREE.MeshStandardMaterial({color:0xff2f5e,roughness:.35,emissive:0x5a0018,emissiveIntensity:.4}),MAXA); appleMesh.castShadow=true; scene.add(appleMesh);
 const leafMesh=new THREE.InstancedMesh(new THREE.SphereGeometry(.16,10,8),new THREE.MeshStandardMaterial({color:0x3ddc84,roughness:.6}),MAXA); scene.add(leafMesh);
+function applyLook(){
+  paintSkin(SKIN); skinBase.set(SKIN.base); headMat.color.copy(skinBase); tailTip.material.color.copy(skinBase);
+  topMark.material.color.set(SKIN.dark); eyeMat.color.setHex(SKIN.eye);
+  appleMesh.material.color.setHex(FRUIT.color); appleMesh.material.emissive.setHex(FRUIT.emissive); appleMesh.material.roughness=FRUIT.rough; leafMesh.material.color.setHex(FRUIT.leaf); }
+function newRoundLook(){ SKIN=pickOther(SKINS,SKIN); FRUIT=pickOther(FRUITS,FRUIT); applyLook();
+  S.banner={txt:`${SKIN.name} · ${FRUIT.emoji} ${FRUIT.name}`,t:performance.now(),col:SKIN.light}; }
 const shadowMesh=new THREE.InstancedMesh(new THREE.CircleGeometry(.3,16),new THREE.MeshBasicMaterial({color:0x000000,transparent:true,opacity:.35,depthWrite:false}),MAXA); scene.add(shadowMesh);
 
 // particles + fire (points)
@@ -334,7 +374,7 @@ function drawBoard(now){
   { const L=curve.getLength(), rp=L/SKIN_PERIOD; skinTex.repeat.set(rp,1); const T=(S.traveled||0)+t; skinTex.offset.set((((T-L)/SKIN_PERIOD)%1+1)%1,0); }
   const H=S.heat; { // fire snake: tint skin toward dark ember and add orange glow; head and tail tip match the body
     const k=Math.min(1,H*1.4); snakeMat.color.setRGB(1,lerp(1,.3,k),lerp(1,.15,k)); snakeMat.emissive.setRGB(.5*k,.12*k,0);
-    headMat.color.setRGB(lerp(.16,.16,k),lerp(.65,.2,k),lerp(.85,.13,k)); headMat.emissive.setRGB(.5*k,.12*k,0);
+    headMat.color.setRGB(lerp(skinBase.r,.16,k),lerp(skinBase.g,.2,k),lerp(skinBase.b,.13,k)); headMat.emissive.setRGB(.5*k,.12*k,0);
     tailTip.material.color.copy(headMat.color); tailTip.material.emissive.setRGB(.5*k,.12*k,0); }
   // head + crown + avatar
   const hp=v3[v3.length-1], prev=v3[v3.length-2]||hp; headMesh.position.copy(hp); headMesh.position.y=.5;
@@ -351,9 +391,9 @@ function drawBoard(now){
   const bounce=t=>{ const n=7.5625,d=2.75; if(t<1/d) return n*t*t; if(t<2/d) return n*(t-=1.5/d)*t+.75; if(t<2.5/d) return n*(t-=2.25/d)*t+.9375; return n*(t-=2.625/d)*t+.984375; };
   const putApple=(x,y,z,sx,sy,spin,tilt,shadowK)=>{
     E.set(tilt,spin,tilt*.6); tmpQ.setFromEuler(E);
-    tmpS.set(sx,sy,sx); tmpM.compose(tmpP.set(x,y,z),tmpQ,tmpS); appleMesh.setMatrixAt(i,tmpM);
-    leafOff.set(.12*sx,.3*sy,0).applyQuaternion(tmpQ); lq.copy(tmpQ);
-    tmpS.set(1.2*sx,.5*sy,.8*sx); tmpM.compose(tmpP.set(x+leafOff.x,y+leafOff.y,z+leafOff.z),lq,tmpS); leafMesh.setMatrixAt(i,tmpM);
+    const F=FRUIT, fs=F.size; tmpS.set(sx*F.shape[0]*fs,sy*F.shape[1]*fs,sx*F.shape[2]*fs); tmpM.compose(tmpP.set(x,y,z),tmpQ,tmpS); appleMesh.setMatrixAt(i,tmpM);
+    leafOff.set(.06*sx,F.leafY*sy*F.shape[1]*fs,0).applyQuaternion(tmpQ); lq.copy(tmpQ);
+    tmpS.set(F.leafShape[0]*sx*fs,F.leafShape[1]*sy*fs,F.leafShape[2]*sx*fs); tmpM.compose(tmpP.set(x+leafOff.x,y+leafOff.y,z+leafOff.z),lq,tmpS); leafMesh.setMatrixAt(i,tmpM);
     tmpM.makeRotationX(-Math.PI/2); tmpM.scale(tmpS.set(shadowK,shadowK,1)); tmpM.setPosition(x,.02,z); shadowMesh.setMatrixAt(i,tmpM); i++; };
   for(const [idx,a] of S.apples){ const p=path[idx]; const x=cx(p), z=cy(p); const age=(now-a.born)/1000;
     const DROP=.7; let y, sx=1, sy=1;
@@ -407,7 +447,7 @@ function step(now){
   if(S.grow>0){ S.grow--; S.len++; }
   if(S.apples.has(next)){
     const a=S.apples.get(next); S.apples.delete(next); (S.popping=S.popping||[]).push({idx:next,t:now}); S.grow++; S.eaten++; S.eatenTotal++;
-    spawnBurst(path[next],16,['#ff2f5e','#ffd166'],5);
+    spawnBurst(path[next],16,FRUIT.burst,5);
     if(a.user) floatText(`+1 ${a.user.name}`);
     sfx.eat();
   }
@@ -505,7 +545,7 @@ function onGift(e){
   const apples=Math.max(1,Math.round(e.coins*cfg.applesPerDiamond));
   dropApples(apples,u);
   sfx.gift(apples>=100);
-  addEvent('gift',u.avatar,`<span class="n">${esc(u.name)}</span> 🎁 ${esc(e.giftName)}${e.count>1?' ×'+e.count:''}`,`+${apples} 🍎`);
+  addEvent('gift',u.avatar,`<span class="n">${esc(u.name)}</span> 🎁 ${esc(e.giftName)}${e.count>1?' ×'+e.count:''}`,`+${apples} ${FRUIT.emoji}`);
 }
 function onBomb(e){
   const u=e.user; const s=S.supporters.get(u.id)||{...u,coins:0}; s.coins+=e.coins; s.name=u.name; if(u.avatar) s.avatar=u.avatar; S.supporters.set(u.id,s);
@@ -515,10 +555,10 @@ function onBomb(e){
   addEvent('bomb',u.avatar,`<span class="n">${esc(u.name)}</span> 💣 ${esc(e.giftName)}${e.count>1?' ×'+e.count:''} blew up the tail!`,`−${cut} 🐍`);
   sfx.explode();
 }
-function onFollow(e){ sfx.follow(); burstConfetti(); S.banner={txt:`➕ NEW FOLLOWER · ${e.user.name}`,t:performance.now(),col:'#7ff3ff'}; dropApples(cfg.applesPerFollow,e.user); addEvent('follow',e.user.avatar,`<span class="n">${esc(e.user.name)}</span> followed ➕`,`+${cfg.applesPerFollow} 🍎`); }
+function onFollow(e){ sfx.follow(); burstConfetti(); S.banner={txt:`➕ NEW FOLLOWER · ${e.user.name}`,t:performance.now(),col:'#7ff3ff'}; dropApples(cfg.applesPerFollow,e.user); addEvent('follow',e.user.avatar,`<span class="n">${esc(e.user.name)}</span> followed ➕`,`+${cfg.applesPerFollow} ${FRUIT.emoji}`); }
 const likeFeedAt=new Map();
 function onLike(e){ const u=e.user; const l=S.roundLikes.get(u.id)||{...u,likes:0}; l.likes+=e.likes; S.roundLikes.set(u.id,l); S.likesTotal=(S.likesTotal||0)+e.likes; S.likeLog.push([performance.now(),e.likes]);
-  S.likeBank+=e.likes; while(S.likeBank>=LIKES_PER_APPLE){ S.likeBank-=LIKES_PER_APPLE; dropApples(1,u); floatText(`❤ ${LIKES_PER_APPLE} likes = 🍎`); }
+  S.likeBank+=e.likes; while(S.likeBank>=LIKES_PER_APPLE){ S.likeBank-=LIKES_PER_APPLE; dropApples(1,u); floatText(`❤ ${LIKES_PER_APPLE} likes = ${FRUIT.emoji}`); }
   const now=performance.now(); for(let i=0;i<Math.min(12,e.likes);i++) S.hearts.push({t:now+i*90,x:900+Math.random()*120,d:.6+Math.random()*.6,s:26+Math.random()*22});
   if(now-(likeFeedAt.get(u.id)||0)>8000){ likeFeedAt.set(u.id,now); addEvent('like',u.avatar,`<span class="n">${esc(u.name)}</span> ❤ liked ×${l.likes}`); }
   sfx.like(); }
@@ -570,6 +610,7 @@ function resetRound(){
   for(const [cell,a] of cells) S.apples.set(idxOf.get(cell.c+','+cell.r),a);
   // apples under the new snake go back to the queue
   const occ=occupied(); for(const [idx,a] of [...S.apples]) if(occ.has(idx)){ S.apples.delete(idx); S.pending.unshift({user:a.user}); }
+  newRoundLook();
   S.phase='play';
 }
 
@@ -593,6 +634,7 @@ function loop(now){
   drawBoard(now); drawFx(now); updateHud(now);
   requestAnimationFrame(loop);
 }
+SKIN=SKINS[Math.floor(Math.random()*SKINS.length)]; FRUIT=FRUITS[Math.floor(Math.random()*FRUITS.length)]; applyLook();
 S.lastStep=performance.now(); requestAnimationFrame(loop);
 
 // ---------- websocket ----------

@@ -4,7 +4,7 @@ An auto-playing snake for vertical TikTok live streams. The snake follows a fixe
 trajectory around the board. Gifts drop apples onto the field (1 💎 = 1 🍎), a follow
 gives +1 🍎, every 50 likes drop one apple and there is always at least one apple on the board.
 A high like rate sets the board on fire (edges first, then the whole field at ~400 likes/min). Bomb gifts (GG, Fireworks, ... configurable) blow up the tail instead.
-The trajectory is a random maze generated fresh every round. The snake eats, grows, fills the board, then a Top Supporters / Top Likes
+The trajectory is a random maze generated fresh every round. Every round also picks a new snake skin (8 color/pattern themes) and a new fruit type (9 fruits); the skins and fruits lists sit at the top of the 3D code in `public/index.html`. The snake eats, grows, fills the board, then a Top Supporters / Top Likes
 leaderboard is shown and a new round starts.
 
 ## Run
