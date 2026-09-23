@@ -17,6 +17,17 @@ Open http://localhost:3000 or add it to OBS as a **Browser Source 1080×1920**.
 Without a username the game runs in demo mode (add `?debug=1` to see the key hints and connection status): **G** gift, **F** follow, **L** like,
 **C** chat, **B** bomb, **K** like storm, **E** end round. Sounds: a real apple-bite crunch when the snake eats "Thanks for the follow!" followed by "Thanks Obama" on every follow, and a random meme clip (metal hit, fart, Ой-ой, Бурмалда, Minecraft XP, nya, pop, Viber, Tuturu, anime wow, uwu) on every donation, one clip at a time; in a normal browser click once to unlock audio (OBS plays automatically). Add `?fruit=Strawberries` (any fruit name) to force a fruit for testing. `http://localhost:3000/?demo=1` generates random events.
 
+## Windows (e.g. a gaming PC)
+Open PowerShell and run:
+```powershell
+irm https://raw.githubusercontent.com/landsbetween/tiktok-snake-live/main/install-windows.ps1 | iex
+```
+It installs Git and Node.js (via winget) if needed, downloads the game to `%USERPROFILE%\tiktok-snake-live`,
+asks your TikTok username once and puts a **Snake Live** shortcut on the Desktop.
+
+In **TikTok LIVE Studio**: Add source → **Link** → `http://localtest.me:3000`, turn on *Custom resolution* 1080×1920
+and *Always keep active*, then Fill the canvas. (`localhost` is rejected by LIVE Studio; `localtest.me` points to your own PC.)
+
 ## Config (env)
 - `APPLES_PER_DIAMOND=1` — apples per diamond
 - `APPLES_PER_FOLLOW=1` — apples per follow
