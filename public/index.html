@@ -111,7 +111,7 @@
   </div>
   <div id="countdown"><small>GET READY</small><b id="cd-n">3</b></div>
 
-  <div id="conn"><i></i><span id="conn-t">demo mode — G gift · B bomb · F follow · L like · K like storm</span></div>
+  <div id="conn" style="display:none"><i></i><span id="conn-t">demo mode — G gift · B bomb · F follow · L like · K like storm</span></div>
 </div>
 
 <script type="module">
@@ -120,6 +120,7 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
 const stage = document.getElementById('stage');
 function fit(){ const s=Math.min(innerWidth/1080, innerHeight/1920); stage.style.transform=`translate(-50%,-50%) scale(${s})`; }
 addEventListener('resize', fit); fit(); setInterval(fit,1000);
+if(new URLSearchParams(location.search).get('debug')==='1') document.getElementById('conn').style.display='';
 
 // ---------- stars ----------
 (()=>{const c=document.getElementById('stars').getContext('2d');
@@ -365,11 +366,9 @@ const MAPS=[
    field:()=>fieldCanvas(g=>{ g.fillStyle='#e4f1fb'; g.fillRect(0,0,FW,FH); blotches(g,700,'rgba(90,140,200,A)',22); cracks(g,25,'rgba(120,170,220,.35)',2);
      for(let i=0;i<500;i++){ g.fillStyle='rgba(255,255,255,.9)'; g.fillRect(Math.random()*FW,Math.random()*FH,2,2); } gridLines(g,'rgba(80,130,190,.14)'); }),
    deco:[['pine',14,{snow:true}],['crystal',8,{col:0xbfeaff}],['rock',6,{col:0xdce9f3}]]},
-  {name:'Lava Lands', cel:{type:'moon',nx:.45,ny:.75,size:24,col:0xff6a4a,glow:0xff3010}, clouds:'dark', tuft:{type:'ember',col:0x3a2020,glow:0xff4a0a}, frame:[0x3a2a28,0xff4a0a], back:'volcano', ground:0x2a1a18, fog:'#2a0806', sky:['#5a1208','#3a0a06','#1a0503','#0a0202'], stars:.4, ring:'#ff8a3a', slab:0x2a1f1f, rock:0x1c1414, hemi:[0xff9a6a,0x1a0505,.45], sun:[0xffb080,1.1], emissive:true,
-   field:()=>fieldCanvas(g=>{ g.fillStyle='#2b2224'; g.fillRect(0,0,FW,FH); blotches(g,900,'rgba(0,0,0,A)',16); cracks(g,40,'#ff6a1a',3); cracks(g,40,'#ffc04a',1); gridLines(g,'rgba(255,120,60,.08)'); }),
-   emissiveMap:c=>{ const e=document.createElement('canvas'); e.width=FW; e.height=FH; const g=e.getContext('2d'); g.drawImage(c,0,0); const d=g.getImageData(0,0,FW,FH), a=d.data;
-     for(let i=0;i<a.length;i+=4){ const hot=a[i]>150&&a[i+1]<200; if(!hot){ a[i]=a[i+1]=a[i+2]=0; } } g.putImageData(d,0,0); return e; },
-   deco:[['rock',16,{col:0x201818,glow:0xff5a1a}],['crystal',6,{col:0xff6a1a}]]},
+  {name:'Lava Lands', cel:{type:'moon',nx:.45,ny:.75,size:24,col:0xff6a4a,glow:0xff3010}, clouds:'dark', tuft:{type:'ember',col:0x3a2020,glow:0xff4a0a}, frame:[0x141013], back:'volcano', ground:0x1c1414, fog:'#2a0806', sky:['#5a1208','#3a0a06','#1a0503','#0a0202'], stars:.4, ring:'#ff8a3a', slab:0x2a1f1f, rock:0x1c1414, hemi:[0xff9a6a,0x1a0505,.45], sun:[0xffb080,1.1], emissive:true,
+   field:()=>lavaField(), lava:true, bumpScale:4,
+   deco:[['basalt',8,{}],['obsidian',9,{}],['lavapool',5,{}],['rock',8,{col:0x1a1214,glow:0xff4a0a}]]},
   {name:'Candy Land', cel:{type:'sun',nx:-.55,ny:.78,size:18,col:0xfff0f8,glow:0xff9ad5}, clouds:'pink', rainbow:true, tuft:{type:'sprinkle',col:0xff4f8b}, frame:[0xff6fb5], back:'candy', ground:0xffd1ea, fog:'#f0b0dc', sky:['#ffd6f0','#ffb3de','#d98fd0','#8a5aa8'], stars:0, ring:'#ffffff', slab:0xff9ccf, rock:0xc77dff, hemi:[0xffffff,0xffb3de,.9], sun:[0xffffff,1.5],
    field:()=>fieldCanvas(g=>{ for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){ g.fillStyle=(r+c)%2?'#ffc7e3':'#fff0f8'; g.fillRect(c*64,r*64,64,64); }
      const cols=['#ff4f8b','#4fc3ff','#ffd23f','#7be07b','#b07bff']; for(let i=0;i<900;i++){ g.save(); g.translate(Math.random()*FW,Math.random()*FH); g.rotate(Math.random()*TAU); g.fillStyle=cols[i%5]; g.fillRect(-5,-1.5,10,3); g.restore(); } }),
@@ -415,6 +414,14 @@ function makeDeco(type,o){ const g=new THREE.Group(); const s=.8+Math.random()*.
   else if(type==='tower'){ const h=1+Math.random()*2.5; const col=[0xff4fd8,0x3ff0ff,0xffe14f][Math.floor(Math.random()*3)];
     const b=new THREE.Mesh(new THREE.BoxGeometry(.6,h,.6),mat(0x16122e,{roughness:.4,metalness:.4})); b.position.y=h/2; g.add(b);
     for(let y=.3;y<h-.1;y+=.35){ const w=new THREE.Mesh(new THREE.BoxGeometry(.62,.06,.62),mat(col,{emissive:col,emissiveIntensity:1.2})); w.position.y=y; g.add(w); } }
+  else if(type==='basalt'){ const n=4+Math.floor(Math.random()*5); for(let i=0;i<n;i++){ const h=.5+Math.random()*1.6; const c=new THREE.Mesh(new THREE.CylinderGeometry(.24,.26,h,6),mat(0x221a1c,{flatShading:true,roughness:.85}));
+      const a=Math.random()*TAU, r=Math.random()*.45; c.position.set(Math.cos(a)*r,h/2,Math.sin(a)*r); g.add(c);
+      const top=new THREE.Mesh(new THREE.CylinderGeometry(.2,.2,.03,6),new THREE.MeshStandardMaterial({color:0x000,emissive:0xff5a14,emissiveIntensity:Math.random()<.5?1.2:.3})); top.position.set(c.position.x,h+.01,c.position.z); g.add(top); } }
+  else if(type==='obsidian'){ for(let i=0;i<3;i++){ const h=.9+Math.random()*1.4; const sp=new THREE.Mesh(new THREE.ConeGeometry(.22+Math.random()*.12,h,5),new THREE.MeshStandardMaterial({color:0x0c0a10,roughness:.15,metalness:.3,emissive:0xffffff,emissiveMap:veinTex,emissiveIntensity:1.1,flatShading:true}));
+      sp.position.set((i-1)*.3+(Math.random()-.5)*.15,h/2,(Math.random()-.5)*.3); sp.rotation.z=(Math.random()-.5)*.5; sp.rotation.x=(Math.random()-.5)*.4; g.add(sp); } }
+  else if(type==='lavapool'){ const r=.7+Math.random()*.6; const shp=new THREE.Shape(); for(let i=0;i<=20;i++){ const a=i/20*TAU, rr=r*(.8+Math.random()*.35); i?shp.lineTo(Math.cos(a)*rr,Math.sin(a)*rr):shp.moveTo(Math.cos(a)*rr,Math.sin(a)*rr); }
+      const pool=new THREE.Mesh(new THREE.ShapeGeometry(shp),lavaPoolMat); pool.rotation.x=-Math.PI/2; pool.position.y=.06; g.add(pool);
+      const rim=new THREE.Mesh(new THREE.TorusGeometry(r*1.02,.1,6,24),mat(0x1a1214,{flatShading:true})); rim.rotation.x=Math.PI/2; rim.position.y=.05; rim.scale.set(1,1.05,1); g.add(rim); }
   g.scale.setScalar(s); g.rotation.y=Math.random()*TAU; g.traverse(m=>{ if(m.isMesh){ m.castShadow=true; m.receiveShadow=true; } }); return g; }
 function buildDecos(map){ if(decoGroup){ scene.remove(decoGroup); decoGroup.traverse(o=>{ if(o.geometry) o.geometry.dispose(); }); }
   decoGroup=new THREE.Group(); const Rtop=Math.max(COLS,ROWS)*.85-.6, placed=[];
@@ -487,15 +494,75 @@ function scatterTufts(m){ const T=m.tuft; const geo={grass:new THREE.ConeGeometr
   const q=new THREE.Quaternion(), e=new THREE.Euler(), sc=new THREE.Vector3(), ps=new THREE.Vector3(), M=new THREE.Matrix4(); let n=0;
   while(n<TUFT_MAX){ const a=Math.random()*TAU, r=Math.sqrt(Math.random())*(ISL-.4); const x=Math.cos(a)*r, z=Math.sin(a)*r;
     if(Math.abs(x)<COLS/2+1.3&&Math.abs(z)<ROWS/2+1.3) continue;
+    if(z>ROWS/2-2) continue;   // keep the strip under the board clean
     const k=T.type==='snow'?.5+Math.random()*1.2:.6+Math.random()*.9; e.set(T.type==='grass'?(Math.random()-.5)*.5:Math.random()*3,Math.random()*TAU,T.type==='grass'?(Math.random()-.5)*.5:Math.random()*3); q.setFromEuler(e);
     sc.set(k,T.type==='snow'?k*.45:k,k); ps.set(x,-.45+(T.type==='grass'?.15*k:0),z); M.compose(ps,q,sc); tuftMesh.setMatrixAt(n++,M); }
   tuftMesh.count=n; tuftMesh.instanceMatrix.needsUpdate=true; }
-let surfTex=null, surfEmi=null;
+// ---------- lava: voronoi basalt plates with glowing seams (color + emissive + bump in one pass) ----------
+function lavaField(){ const W=FW,H=FH, GX=9, GY=10, cw=W/GX, ch=H/GY, seeds=[];
+  for(let j=0;j<GY;j++) for(let i=0;i<GX;i++) seeds.push([(i+.15+Math.random()*.7)*cw,(j+.15+Math.random()*.7)*ch,Math.random()]);
+  const col=document.createElement('canvas'), emi=document.createElement('canvas'), bmp=document.createElement('canvas'); for(const c of [col,emi,bmp]){ c.width=W; c.height=H; }
+  const cd=col.getContext('2d').createImageData(W,H), ed=emi.getContext('2d').createImageData(W,H), bd=bmp.getContext('2d').createImageData(W,H);
+  const hot=[[0,[255,250,210]],[.18,[255,200,80]],[.45,[255,110,20]],[.75,[200,30,5]],[1,[60,8,4]]];
+  const ramp=t=>{ for(let k=1;k<hot.length;k++) if(t<=hot[k][0]){ const [a,ca]=hot[k-1],[b,cb]=hot[k]; const f=(t-a)/(b-a); return ca.map((v,i)=>v+(cb[i]-v)*f); } return hot[hot.length-1][1]; };
+  const SEAM=13, HALO=34;
+  for(let y=0;y<H;y++){ const gy=Math.floor(y/ch); for(let x=0;x<W;x++){ const gx=Math.floor(x/cw); let d1=1e9,d2=1e9,s1=null;
+      for(let yy=gy-1;yy<=gy+1;yy++){ if(yy<0||yy>=GY) continue; for(let xx=gx-1;xx<=gx+1;xx++){ if(xx<0||xx>=GX) continue; const s=seeds[yy*GX+xx]; const dx=x-s[0],dy=y-s[1],d=dx*dx+dy*dy; if(d<d1){ d2=d1; d1=d; s1=s; } else if(d<d2) d2=d; } }
+      const edge=(Math.sqrt(d2)-Math.sqrt(d1))*.5 + (Math.random()-.5)*1.6;  // distance to the plate border
+      const o=(y*W+x)*4; let r,g,b, er=0,eg=0,eb=0, bump;
+      if(edge<SEAM){ const [cr,cg,cb]=ramp(Math.max(0,edge)/SEAM); r=cr; g=cg; b=cb; er=cr; eg=cg; eb=cb; bump=20+edge*4; }
+      else { const n=(Math.random()*18)|0, shade=34+s1[2]*16-Math.min(20,(edge-SEAM)*.2)*0; r=shade+12+n; g=shade+n*.7; b=shade+n*.6+4;
+        if(edge<HALO){ const k=1-(edge-SEAM)/(HALO-SEAM); r+=110*k*k; g+=26*k*k; er=150*k*k*k; eg=30*k*k*k; } bump=Math.min(255,120+(edge-SEAM)*3); }
+      cd.data[o]=r; cd.data[o+1]=g; cd.data[o+2]=b; cd.data[o+3]=255; ed.data[o]=er; ed.data[o+1]=eg; ed.data[o+2]=eb; ed.data[o+3]=255; bd.data[o]=bd.data[o+1]=bd.data[o+2]=bump; bd.data[o+3]=255; } }
+  col.getContext('2d').putImageData(cd,0,0); emi.getContext('2d').putImageData(ed,0,0); bmp.getContext('2d').putImageData(bd,0,0);
+  return {color:col,emissive:emi,bump:bmp}; }
+// animated lava surface texture (pools, lavafalls): scrolls every frame
+const lavaFlowTex=canvasTex(128,256,(c,W,H)=>{ const g=c.createLinearGradient(0,0,W,0); g.addColorStop(0,'#b01a04'); g.addColorStop(.5,'#ff7a14'); g.addColorStop(1,'#b01a04'); c.fillStyle=g; c.fillRect(0,0,W,H);
+  for(let i=0;i<140;i++){ const x=Math.random()*W, y=Math.random()*H, h=10+Math.random()*50; const gr=c.createLinearGradient(0,y,0,y+h); gr.addColorStop(0,'rgba(255,240,160,0)'); gr.addColorStop(.5,`rgba(255,${190+Math.random()*60|0},90,.8)`); gr.addColorStop(1,'rgba(255,240,160,0)'); c.fillStyle=gr; c.fillRect(x,y,2+Math.random()*4,h); }
+  for(let i=0;i<60;i++){ c.fillStyle='rgba(40,6,2,.55)'; c.beginPath(); c.ellipse(Math.random()*W,Math.random()*H,3+Math.random()*9,6+Math.random()*16,0,0,TAU); c.fill(); } });
+lavaFlowTex.wrapT=THREE.RepeatWrapping;
+const lavaPoolTex=lavaFlowTex.clone(); lavaPoolTex.needsUpdate=true; lavaPoolTex.wrapS=lavaPoolTex.wrapT=THREE.RepeatWrapping;
+const lavaMat=new THREE.MeshStandardMaterial({color:0x000000,emissive:0xffffff,emissiveMap:lavaFlowTex,emissiveIntensity:1.6,roughness:.4});
+const lavaPoolMat=new THREE.MeshStandardMaterial({color:0x000000,emissive:0xffffff,emissiveMap:lavaPoolTex,emissiveIntensity:1.5,roughness:.3});
+const veinTex=canvasTex(128,128,(c,W,H)=>{ c.fillStyle='#000'; c.fillRect(0,0,W,H); c.strokeStyle='#ff5a10'; c.lineCap='round';
+  for(let i=0;i<9;i++){ let x=Math.random()*W,y=Math.random()*H,a=Math.random()*TAU; c.lineWidth=1+Math.random()*2.5; c.beginPath(); c.moveTo(x,y); for(let k=0;k<10;k++){ a+=(Math.random()-.5)*1.3; x+=Math.cos(a)*9; y+=Math.sin(a)*9; c.lineTo(x,y); } c.stroke(); } });
+// rock cracks on the island body (lava only)
+const rockCrackTex=canvasTex(512,256,(c,W,H)=>{ c.fillStyle='#000'; c.fillRect(0,0,W,H); c.lineCap='round';
+  for(let i=0;i<40;i++){ let x=Math.random()*W,y=Math.random()*H*.3,a=Math.PI/2+(Math.random()-.5); c.strokeStyle=Math.random()<.5?'#ff6a14':'#ff3a08'; c.lineWidth=1.5+Math.random()*3; c.beginPath(); c.moveTo(x,y);
+    for(let k=0;k<16;k++){ a+=(Math.random()-.5)*.9; x+=Math.cos(a)*10; y+=Math.sin(a)*10; c.lineTo(x,y); } c.stroke(); } });
+// rising embers
+const EMB=320; const emberPts=(()=>{ const geo=new THREE.BufferGeometry(); geo.setAttribute('position',new THREE.BufferAttribute(new Float32Array(EMB*3),3)); geo.setAttribute('color',new THREE.BufferAttribute(new Float32Array(EMB*3),3));
+  const p=new THREE.Points(geo,new THREE.PointsMaterial({size:.35,map:glowTex,vertexColors:true,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending})); p.frustumCulled=false; p.visible=false; scene.add(p); return p; })();
+const embers=[]; for(let i=0;i<EMB;i++) embers.push({x:0,y:-99,z:0,v:0,life:0,age:1,s:Math.random()*10});
+let lavaFalls=null;
+function buildLavaExtras(on){ if(lavaFalls){ scene.remove(lavaFalls); lavaFalls=null; } emberPts.visible=on;
+  rock.material.emissiveMap=on?rockCrackTex:null; rock.material.emissive.setHex(on?0xffffff:0); rock.material.emissiveIntensity=on?1.2:0; rock.material.needsUpdate=true;
+  if(!on) return; lavaFalls=new THREE.Group();
+  for(let i=0;i<9;i++){ const a=Math.PI*(1.05+i*.1)+(Math.random()-.5)*.08; if(i>=6) continue;
+    const w=1.4+Math.random()*1.2, h=5+Math.random()*3; const f=new THREE.Mesh(new THREE.PlaneGeometry(w,h,1,8),lavaMat); const x=Math.cos(a)*(ISL+.05), z=Math.sin(a)*(ISL+.05);
+    f.position.set(x,-.5-h/2,z); f.lookAt(x*2,-.5-h/2,z*2); lavaFalls.add(f);
+    const lip=new THREE.Mesh(new THREE.CylinderGeometry(w*.55,w*.55,.12,16),lavaPoolMat); lip.scale.z=.5; lip.position.set(Math.cos(a)*(ISL-.5),-.42,Math.sin(a)*(ISL-.5)); lip.lookAt(0,-.42,0); lavaFalls.add(lip); }
+  for(const sx of [-1,1]) for(let k=0;k<2;k++){ const a=(sx>0?0:Math.PI)+(k?.25:-.25)*sx; const w=1.2+Math.random(), h=6+Math.random()*3; const f=new THREE.Mesh(new THREE.PlaneGeometry(w,h,1,8),lavaMat);
+    const x=Math.cos(a)*(ISL+.05), z=Math.sin(a)*(ISL+.05); f.position.set(x,-.5-h/2,z); f.lookAt(x*2,-.5-h/2,z*2); lavaFalls.add(f); }
+  scene.add(lavaFalls); }
+function animateLava(now,dt){ if(!emberPts.visible) return;
+  lavaFlowTex.offset.y=(now/2200)%1; lavaPoolTex.offset.set((now/9000)%1,(now/7000)%1);
+  surf.material.emissiveIntensity=.85+Math.sin(now/650)*.2+Math.sin(now/170)*.04;
+  const pos=emberPts.geometry.attributes.position, col=emberPts.geometry.attributes.color;
+  for(let i=0;i<EMB;i++){ const e=embers[i]; e.age+=dt/e.life;
+    if(e.age>=1){ const onBoard=Math.random()<.6; if(onBoard){ e.x=(Math.random()-.5)*COLS; e.z=(Math.random()-.5)*ROWS; } else { const a=Math.random()*TAU, r=COLS/2+1.5+Math.random()*(ISL-COLS/2-2); e.x=Math.cos(a)*r; e.z=Math.sin(a)*r; }
+      e.y=.05; e.v=.6+Math.random()*1.4; e.life=1.2+Math.random()*2.2; e.age=0; }
+    e.y+=e.v*dt; e.x+=Math.sin(now/500+e.s)*dt*.35; e.z+=Math.cos(now/650+e.s)*dt*.25;
+    const f=Math.sin(e.age*Math.PI)*(.7+.3*Math.sin(now/60+e.s)); pos.setXYZ(i,e.x,e.y,e.z); col.setXYZ(i,f,.45*f*(1-e.age*.5),.08*f); }
+  pos.needsUpdate=col.needsUpdate=true; }
+let surfTex=null, surfEmi=null, surfBump=null;
 function applyMap(){ const m=MAP;
-  const c=m.field(); if(surfTex) surfTex.dispose(); surfTex=new THREE.CanvasTexture(c); surfTex.colorSpace=THREE.SRGBColorSpace; surfTex.anisotropy=8;
+  const F0=m.field(); const c=F0.color||F0; if(surfTex) surfTex.dispose(); surfTex=new THREE.CanvasTexture(c); surfTex.colorSpace=THREE.SRGBColorSpace; surfTex.anisotropy=8;
   { const g=c.getContext('2d'); const v=g.createRadialGradient(FW/2,FH/2,Math.min(FW,FH)*.35,FW/2,FH/2,Math.max(FW,FH)*.72); v.addColorStop(0,'rgba(0,0,0,0)'); v.addColorStop(1,'rgba(0,0,0,.35)'); g.fillStyle=v; g.fillRect(0,0,FW,FH); surfTex.needsUpdate=true; }
-  surf.material.map=surfTex; surf.material.bumpMap=surfTex; surf.material.bumpScale=2.5; if(surfEmi){ surfEmi.dispose(); surfEmi=null; }
-  if(m.emissiveMap){ surfEmi=new THREE.CanvasTexture(m.emissiveMap(c)); surfEmi.colorSpace=THREE.SRGBColorSpace; surf.material.emissiveMap=surfEmi; surf.material.emissive.set(0xffffff); surf.material.emissiveIntensity=.9; }
+  if(surfBump){ surfBump.dispose(); surfBump=null; } if(F0.bump){ surfBump=new THREE.CanvasTexture(F0.bump); surfBump.anisotropy=8; }
+  surf.material.map=surfTex; surf.material.bumpMap=surfBump||surfTex; surf.material.bumpScale=m.bumpScale||2.5; if(surfEmi){ surfEmi.dispose(); surfEmi=null; }
+  if(F0.emissive){ surfEmi=new THREE.CanvasTexture(F0.emissive); surfEmi.colorSpace=THREE.SRGBColorSpace; surf.material.emissiveMap=surfEmi; surf.material.emissive.set(0xffffff); surf.material.emissiveIntensity=1.1; }
+  else if(m.emissiveMap){ surfEmi=new THREE.CanvasTexture(m.emissiveMap(c)); surfEmi.colorSpace=THREE.SRGBColorSpace; surf.material.emissiveMap=surfEmi; surf.material.emissive.set(0xffffff); surf.material.emissiveIntensity=.9; }
   else { surf.material.emissiveMap=null; surf.material.emissive.set(0x000000); surf.material.emissiveIntensity=0; }
   surf.material.needsUpdate=true;
   fieldMat.color.setHex(m.slab); rock.material.color.setHex(m.rock); scene.fog.color.set(m.sky[1]); capMesh.material.color.setHex(m.ground); frameMat.color.setHex(m.frame[0]); frameMat.emissive.setHex(m.frame[1]||0); frameMat.emissiveIntensity=m.frame[1]?.9:0;
@@ -505,7 +572,7 @@ function applyMap(){ const m=MAP;
   document.querySelectorAll('.ring,.beam').forEach(r=>r.style.display='none');
   document.querySelectorAll('.ring').forEach(r=>{ r.style.borderColor=m.ring; r.style.boxShadow=`0 0 40px 8px ${m.ring}59, inset 0 0 40px ${m.ring}4d`; });
   const beam=document.querySelector('.beam'); if(beam) beam.style.background=`radial-gradient(50% 100% at 50% 0%, ${m.ring}40, ${m.ring}00 70%)`;
-  buildDecos(m); }
+  buildDecos(m); buildLavaExtras(!!m.lava); }
 const pickOther=(arr,cur)=>{ let x; do{ x=arr[Math.floor(Math.random()*arr.length)]; } while(arr.length>1&&x===cur); return x; };
 
 const SKIN_PERIOD=1.6; // world units per pattern repeat
@@ -681,7 +748,7 @@ function drawBoard(now){
   fillPoints(smokePts,smoke);
   fillPoints(fireBig,big); fillPoints(fireSmall,small);
   fireLight.intensity=H*12+ (H>0?Math.sin(now/70)*10*H:0); 
-  animateSky(now,dt);
+  animateSky(now,dt); animateLava(now,dt);
   // camera shake
   const sh=S.shake?Math.max(0,1-(now-S.shake)/500):0;
   camera.position.copy(CAM_POS); camera.lookAt(CAM_LOOK);
@@ -761,7 +828,7 @@ const sfx=(()=>{
     drop: mute,
     gift: mute,
     like: mute,
-    follow: safe(()=>{ const a=new Audio('sounds/follow.mp3'); a.volume=.8; a.play().catch(()=>{}); }),
+    follow: safe(()=>{ const a=new Audio('sounds/follow.mp3'); a.volume=.8; a.onended=()=>{ const b=new Audio('sounds/thanks-obama.mp3'); b.volume=.9; b.play().catch(()=>{}); }; a.play().catch(()=>{}); }),
     explode: mute,
     tick: mute,
     go: mute,

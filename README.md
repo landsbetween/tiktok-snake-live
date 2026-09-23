@@ -14,8 +14,8 @@ node server.js <tiktok_username>     # e.g. node server.js mr.gd
 ```
 Open http://localhost:3000 or add it to OBS as a **Browser Source 1080×1920**.
 
-Without a username the game runs in demo mode: **G** gift, **F** follow, **L** like,
-**C** chat, **B** bomb, **K** like storm, **E** end round. Sounds: a real apple-bite crunch when the snake eats and "Thanks for the follow!" on every follow; in a normal browser click once to unlock audio (OBS plays automatically). Add `?fruit=Strawberries` (any fruit name) to force a fruit for testing. `http://localhost:3000/?demo=1` generates random events.
+Without a username the game runs in demo mode (add `?debug=1` to see the key hints and connection status): **G** gift, **F** follow, **L** like,
+**C** chat, **B** bomb, **K** like storm, **E** end round. Sounds: a real apple-bite crunch when the snake eats and "Thanks for the follow!" followed by "Thanks Obama" on every follow; in a normal browser click once to unlock audio (OBS plays automatically). Add `?fruit=Strawberries` (any fruit name) to force a fruit for testing. `http://localhost:3000/?demo=1` generates random events.
 
 ## Config (env)
 - `APPLES_PER_DIAMOND=1` — apples per diamond
