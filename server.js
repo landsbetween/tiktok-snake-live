@@ -108,7 +108,11 @@ function handleJoin(user) {
   broadcast({ type: 'join', user });
 }
 
-wss.on('connection', (ws) => {
+const perf = new Map(); // latest frame stats reported by each game page
+wss.on('connection', (ws, req) => {
+  const id = Math.random().toString(36).slice(2, 7);
+  ws.on('message', (m) => { try { const d = JSON.parse(m); if (d.type === 'perf') perf.set(id, { ...d, at: Date.now() }); } catch {} });
+  ws.on('close', () => perf.delete(id));
   ws.send(
     JSON.stringify({
       type: 'snapshot',
@@ -131,6 +135,7 @@ app.post('/api/sim', (req, res) => {
   else return res.status(400).json({ ok: false, error: 'unknown type' });
   res.json({ ok: true });
 });
+app.get('/api/perf', (_req, res) => res.json([...perf.values()]));
 app.get('/api/status', (_req, res) => res.json({ tiktok: tiktokStatus, supporters: supporters.size }));
 
 async function connectTikTok() {
