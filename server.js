@@ -141,7 +141,7 @@ async function connectTikTok() {
   const { TikTokLiveConnection, WebcastEvent } = require('tiktok-live-connector');
   const conn = new TikTokLiveConnection(USERNAME, {
     processInitialData: false,
-    enableExtendedGiftInfo: true,
+    enableExtendedGiftInfo: false, // true needs a paid EulerStream plan; diamondCount comes with every gift anyway
     fetchRoomInfoOnConnect: true,
     ...(chatEnabled
       ? { signApiKey: CHAT.signApiKey, authenticateWs: true,
