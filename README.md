@@ -2,7 +2,8 @@
 
 An auto-playing snake for vertical TikTok live streams. The snake follows a fixed
 trajectory around the board. Gifts drop apples onto the field (1 💎 = 1 🍎), a follow
-gives +1 🍎. The snake eats, grows, fills the board, then a Top Supporters / Top Likes
+gives +1 🍎. Bomb gifts (GG, Fireworks, ... configurable) blow up the tail instead.
+The trajectory is a random maze generated fresh every round. The snake eats, grows, fills the board, then a Top Supporters / Top Likes
 leaderboard is shown and a new round starts.
 
 ## Run
@@ -13,11 +14,12 @@ node server.js <tiktok_username>     # e.g. node server.js mr.gd
 Open http://localhost:3000 or add it to OBS as a **Browser Source 1080×1920**.
 
 Without a username the game runs in demo mode: **G** gift, **F** follow, **L** like,
-**C** chat, **E** end round. `http://localhost:3000/?demo=1` generates random events.
+**C** chat, **B** bomb, **E** end round. Sounds are synthesized with Web Audio; in a normal browser click once to unlock audio (OBS plays automatically). `http://localhost:3000/?demo=1` generates random events.
 
 ## Config (env)
 - `APPLES_PER_DIAMOND=1` — apples per diamond
 - `APPLES_PER_FOLLOW=1` — apples per follow
+- `BOMB_GIFTS=GG,Fireworks,Boxing Gloves,Rocket` — gift names that cut the tail (by diamonds × count)
 - `PORT=3000`
 
 Board size (`COLS`/`ROWS`), round length (`ROUND_MS`) and speed (`STEP_MS_*`) are

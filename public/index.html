@@ -62,6 +62,8 @@
   .ev .av{width:52px;height:52px;border-radius:50%;background:#1f4c4c center/cover;flex:none;border:2px solid rgba(255,255,255,.25)}
   .ev .n{color:var(--gold)}
   .ev .plus{margin-left:auto;font-family:Orbitron;color:var(--apple);font-size:30px;white-space:nowrap}
+  .ev.bomb{border-color:rgba(255,122,26,.6);box-shadow:0 0 24px rgba(255,80,0,.25);animation:evin .35s, shake .4s}
+  @keyframes shake{0%,100%{transform:none}25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
   .ev.gift{border-color:rgba(255,209,102,.5);box-shadow:0 0 24px rgba(255,209,102,.15)}
   @keyframes evin{from{opacity:0;transform:translateY(20px) scale(.95)}to{opacity:1;transform:none}}
 
@@ -107,6 +109,7 @@
       <div class="row"><span class="ic">🍩</span>Donut <span class="val">+30 🍎</span></div>
       <div class="row"><span class="ic">🌌</span>Galaxy <span class="val">+1000 🍎</span></div>
       <div class="row"><span class="ic">➕</span>Follow <span class="val">+1 🍎</span></div>
+      <div class="row"><span class="ic">💣</span>GG / Fireworks <span class="val" style="color:var(--apple)">−💎 tail</span></div>
       <div class="row" style="font-size:22px;color:var(--muted);padding-top:10px">1 💎 = 1 🍎 · any gift</div>
     </div>
     <div id="stats" class="panel">
@@ -136,7 +139,7 @@
   </div>
   <div id="countdown"><small>GET READY</small><b id="cd-n">3</b></div>
 
-  <div id="conn"><i></i><span id="conn-t">demo mode — G gift · F follow · L like</span></div>
+  <div id="conn"><i></i><span id="conn-t">demo mode — G gift · B bomb · F follow · L like</span></div>
 </div>
 
 <script>
@@ -163,11 +166,34 @@ const START_LEN = 3;
 const STEP_MS_MIN = 70, STEP_MS_MAX = 150; // speed: more apples on the field = faster
 const N = COLS*ROWS;
 
-// Hamiltonian cycle: serpentine through rows, return along column 0
-const path=[];
-for(let r=0;r<ROWS;r++){ if(r%2===0) for(let c=1;c<COLS;c++) path.push({c,r}); else for(let c=COLS-1;c>=1;c--) path.push({c,r}); }
-for(let r=ROWS-1;r>=0;r--) path.push({c:0,r});
-const idxOf = new Map(path.map((p,i)=>[p.c+','+p.r, i]));
+// Random Hamiltonian cycle: random spanning tree on a (COLS/2 x ROWS/2) coarse grid,
+// then walk clockwise around the tree on the fine grid. Different maze every round.
+let path=[], idxOf=new Map();
+function buildPath(){
+  const CW=COLS/2, CH=ROWS/2;
+  const edges=new Set(); // "x,y,R" / "x,y,D"
+  const seen=new Set(['0,0']); const frontier=[];
+  const push=(x,y)=>{ for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){ const nx=x+dx,ny=y+dy; if(nx>=0&&ny>=0&&nx<CW&&ny<CH&&!seen.has(nx+','+ny)) frontier.push([x,y,nx,ny]); } };
+  push(0,0);
+  while(frontier.length){ // randomized Prim
+    const k=Math.floor(Math.random()*frontier.length); const [x,y,nx,ny]=frontier.splice(k,1)[0];
+    if(seen.has(nx+','+ny)) continue; seen.add(nx+','+ny);
+    if(nx>x) edges.add(x+','+y+',R'); else if(nx<x) edges.add(nx+','+ny+',R'); else if(ny>y) edges.add(x+','+y+',D'); else edges.add(nx+','+ny+',D');
+    push(nx,ny);
+  }
+  const has=(x,y,d)=>edges.has(x+','+y+','+d);
+  const dir=(c,r)=>{ const X=c>>1,Y=r>>1,sx=c&1,sy=r&1;
+    if(sx===0&&sy===0) return has(X,Y-1,'D')?[0,-1]:[1,0];      // TL: up if tree edge up, else right
+    if(sx===1&&sy===0) return has(X,Y,'R')?[1,0]:[0,1];         // TR: right if edge right, else down
+    if(sx===1&&sy===1) return has(X,Y,'D')?[0,1]:[-1,0];        // BR: down if edge down, else left
+    return has(X-1,Y,'R')?[-1,0]:[0,-1];                        // BL: left if edge left, else up
+  };
+  path=[]; let c=0,r=0;
+  do{ path.push({c,r}); const [dx,dy]=dir(c,r); c+=dx; r+=dy; } while(!(c===0&&r===0) && path.length<=N);
+  if(path.length!==N) return buildPath(); // safety, should not happen
+  idxOf=new Map(path.map((p,i)=>[p.c+','+p.r,i]));
+}
+buildPath();
 
 // ---------- state ----------
 const S = {
@@ -193,6 +219,7 @@ function drainPending(){
     const {user}=S.pending.shift();
     S.apples.set(idx,{born:performance.now(),user});
   }
+  sfx.drop();
 }
 
 // ---------- images ----------
@@ -220,6 +247,7 @@ function snakePoints(t){
 function drawBoard(now){
   const t=Math.min(1,(now-S.lastStep)/S.stepMs);
   bc.clearRect(0,0,board.width,board.height);
+  const sh=S.shake?Math.max(0,1-(now-S.shake)/500):0; bc.save(); if(sh) bc.translate((Math.random()-.5)*30*sh,(Math.random()-.5)*30*sh);
   // field
   bc.fillStyle='#1b4a48'; roundRect(bc,OX-18,OY-18,CELL*COLS+36,CELL*ROWS+36,26); bc.fill();
   bc.strokeStyle='rgba(127,243,255,.35)'; bc.lineWidth=3; bc.stroke();
@@ -232,7 +260,7 @@ function drawBoard(now){
   for(let c=1;c<COLS;c++){bc.beginPath();bc.moveTo(OX+c*CELL,OY);bc.lineTo(OX+c*CELL,OY+ROWS*CELL);bc.stroke();}
   for(let r=1;r<ROWS;r++){bc.beginPath();bc.moveTo(OX,OY+r*CELL);bc.lineTo(OX+COLS*CELL,OY+r*CELL);bc.stroke();}
   // track (trajectory), barely visible
-  bc.strokeStyle='rgba(127,243,255,.08)'; bc.lineWidth=CELL*.22; bc.lineJoin='round'; bc.lineCap='round';
+  bc.strokeStyle='rgba(127,243,255,.13)'; bc.lineWidth=CELL*.5; bc.lineJoin='round'; bc.lineCap='round';
   bc.beginPath(); path.forEach((p,i)=> i?bc.lineTo(cx(p),cy(p)):bc.moveTo(cx(p),cy(p))); bc.closePath(); bc.stroke();
 
   // apples
@@ -267,9 +295,9 @@ function drawBoard(now){
     bc.strokeText(ts.name,h.x,h.y+r+26); bc.fillText(ts.name,h.x,h.y+r+26); }
 
   // particles (board space)
-  for(const p of S.particles){ const a=1-(now-p.t)/600; if(a<=0) continue; bc.globalAlpha=a; bc.fillStyle=p.col;
+  for(const p of S.particles){ const a=1-(now-p.t)/600; if(a<=0||a>1) continue; bc.globalAlpha=a; bc.fillStyle=p.col;
     bc.beginPath(); bc.arc(p.x+p.vx*(now-p.t)/16,p.y+p.vy*(now-p.t)/16,4,0,7); bc.fill(); }
-  bc.globalAlpha=1; S.particles=S.particles.filter(p=>now-p.t<600);
+  bc.globalAlpha=1; S.particles=S.particles.filter(p=>now-p.t<600); bc.restore();
 }
 function bead(x,y){ bc.beginPath(); bc.arc(x,y,5,0,7); bc.fill(); }
 function roundRect(c,x,y,w,h,r){ c.beginPath(); c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r); c.arcTo(x+w,y+h,x,y+h,r); c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); c.closePath(); }
@@ -285,6 +313,7 @@ function step(now){
     const a=S.apples.get(next); S.apples.delete(next); S.grow++; S.eaten++; S.eatenTotal++;
     const p=path[next]; for(let i=0;i<14;i++) S.particles.push({x:cx(p),y:cy(p),vx:(Math.random()-.5)*6,vy:(Math.random()-.5)*6-2,t:now,col:Math.random()<.5?'#ff2f5e':'#ffd166'});
     if(a.user) floatText(`+1 ${a.user.name}`);
+    sfx.eat();
   }
   S.lastStep=now;
   // speed scales with pending apples to keep it dynamic
@@ -304,6 +333,31 @@ function drawFx(now){
     fx.strokeStyle='rgba(0,0,0,.6)'; fx.lineWidth=6; const y=1100-a*260; fx.strokeText(f.txt,f.x,y); fx.fillText(f.txt,f.x,y); }
   fx.globalAlpha=1; S.floats=S.floats.filter(f=>now-f.t<1400);
 }
+
+// ---------- sounds (synthesized, no files) ----------
+const sfx=(()=>{
+  let ac=null, master=null;
+  const ctx=()=>{ if(!ac){ ac=new (window.AudioContext||window.webkitAudioContext)(); master=ac.createGain(); master.gain.value=.35; master.connect(ac.destination); } if(ac.state==='suspended') ac.resume(); return ac; };
+  function tone(f,dur,type='sine',vol=1,slide=0,when=0){ const a=ctx(); const o=a.createOscillator(), g=a.createGain(); o.type=type; o.frequency.setValueAtTime(f,a.currentTime+when);
+    if(slide) o.frequency.exponentialRampToValueAtTime(Math.max(20,f+slide),a.currentTime+when+dur);
+    g.gain.setValueAtTime(0,a.currentTime+when); g.gain.linearRampToValueAtTime(vol,a.currentTime+when+.01); g.gain.exponentialRampToValueAtTime(.001,a.currentTime+when+dur);
+    o.connect(g); g.connect(master); o.start(a.currentTime+when); o.stop(a.currentTime+when+dur+.05); }
+  function noise(dur,vol=1,when=0,lp=1200){ const a=ctx(); const b=a.createBuffer(1,a.sampleRate*dur,a.sampleRate); const d=b.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*(1-i/d.length);
+    const src=a.createBufferSource(); src.buffer=b; const f=a.createBiquadFilter(); f.type='lowpass'; f.frequency.value=lp; const g=a.createGain(); g.gain.value=vol; src.connect(f); f.connect(g); g.connect(master); src.start(a.currentTime+when); }
+  const safe=fn=>(...x)=>{ try{ fn(...x); }catch(e){} };
+  return {
+    unlock: safe(()=>ctx()),
+    eat:    safe(()=>{ tone(660,.08,'square',.5,300); }),
+    drop:   safe(()=>{ tone(220,.12,'triangle',.4,-120); noise(.06,.15,0,800); }),
+    gift:   safe(big=>{ [523,659,784,1046].forEach((f,i)=>tone(f,.25,'triangle',.5,0,i*.08)); if(big){ [1046,1318,1568].forEach((f,i)=>tone(f,.5,'sine',.5,0,.4+i*.1)); } }),
+    follow: safe(()=>{ tone(880,.15,'sine',.5,0,0); tone(1320,.25,'sine',.5,0,.12); }),
+    explode:safe(()=>{ noise(.6,.9,0,600); tone(90,.5,'sawtooth',.6,-60); }),
+    tick:   safe(()=>{ tone(880,.1,'square',.35); }),
+    go:     safe(()=>{ tone(1320,.4,'square',.4); }),
+    end:    safe(()=>{ [784,659,523,392].forEach((f,i)=>tone(f,.35,'triangle',.5,0,i*.15)); }),
+  };
+})();
+addEventListener('pointerdown',sfx.unlock,{once:true}); addEventListener('keydown',sfx.unlock,{once:true});
 
 // ---------- HUD ----------
 const $=id=>document.getElementById(id);
@@ -329,9 +383,19 @@ function onGift(e){
   const u=e.user; const s=S.supporters.get(u.id)||{...u,coins:0}; s.coins+=e.coins; s.name=u.name; if(u.avatar) s.avatar=u.avatar; S.supporters.set(u.id,s);
   const apples=Math.max(1,Math.round(e.coins*cfg.applesPerDiamond));
   dropApples(apples,u);
+  sfx.gift(apples>=100);
   addEvent('gift',u.avatar,`<span class="n">${esc(u.name)}</span> 🎁 ${esc(e.giftName)}${e.count>1?' ×'+e.count:''}`,`+${apples} 🍎`);
 }
-function onFollow(e){ dropApples(cfg.applesPerFollow,e.user); addEvent('follow',e.user.avatar,`<span class="n">${esc(e.user.name)}</span> followed ➕`,`+${cfg.applesPerFollow} 🍎`); }
+function onBomb(e){
+  const u=e.user; const s=S.supporters.get(u.id)||{...u,coins:0}; s.coins+=e.coins; s.name=u.name; if(u.avatar) s.avatar=u.avatar; S.supporters.set(u.id,s);
+  const cut=Math.min(e.power, Math.max(0,S.len-START_LEN));
+  const now=performance.now(); const tail=(S.head-S.len+1+N)%N;
+  for(let i=0;i<cut;i++){ const p=path[(tail+i)%N]; for(let k=0;k<10;k++) S.particles.push({x:cx(p),y:cy(p),vx:(Math.random()-.5)*10,vy:(Math.random()-.5)*10-3,t:now+i*15,col:Math.random()<.5?'#ff7a1a':'#ffd166'}); }
+  S.len-=cut; S.grow=0; S.shake=now;
+  addEvent('bomb',u.avatar,`<span class="n">${esc(u.name)}</span> 💣 ${esc(e.giftName)}${e.count>1?' ×'+e.count:''} blew up the tail!`,`−${cut} 🐍`);
+  sfx.explode();
+}
+function onFollow(e){ sfx.follow(); dropApples(cfg.applesPerFollow,e.user); addEvent('follow',e.user.avatar,`<span class="n">${esc(e.user.name)}</span> followed ➕`,`+${cfg.applesPerFollow} 🍎`); }
 function onLike(e){ const u=e.user; const l=S.roundLikes.get(u.id)||{...u,likes:0}; l.likes+=e.likes; S.roundLikes.set(u.id,l); }
 function onChat(e){ addEvent('chat',e.user.avatar,`<span class="n">${esc(e.user.name)}</span> ${esc(e.text)}`); }
 function onJoin(e){ addEvent('join',e.user.avatar,`<span class="n">${esc(e.user.name)}</span> joined 👋`); }
@@ -342,6 +406,7 @@ function handle(msg){
     case 'snapshot': for(const s of msg.supporters||[]) S.supporters.set(s.id,s); Object.assign(cfg,msg.config||{}); setConn(msg.tiktok); break;
     case 'tiktok': setConn(msg); break;
     case 'gift': onGift(msg); break;
+    case 'bomb': onBomb(msg); break;
     case 'follow': onFollow(msg); break;
     case 'like': onLike(msg); break;
     case 'chat': onChat(msg); break;
@@ -349,7 +414,7 @@ function handle(msg){
   }
 }
 function setConn(t){ const c=$('conn'); if(!t) return; c.classList.toggle('on',!!t.connected);
-  $('conn-t').textContent = t.connected?`LIVE @${t.username}`:(t.username?`@${t.username}: ${t.error||'connecting…'}`:'demo mode — G gift · F follow · L like'); }
+  $('conn-t').textContent = t.connected?`LIVE @${t.username}`:(t.username?`@${t.username}: ${t.error||'connecting…'}`:'demo mode — G gift · B bomb · F follow · L like'); }
 
 // ---------- round flow ----------
 function endRound(){
@@ -361,18 +426,22 @@ function endRound(){
   $('ch-av').style.backgroundImage=ch&&ch.avatar?`url('${ch.avatar}')`:'';
   $('top-sup').innerHTML=sup.slice(0,5).map((s,i)=>li(i,s,s.coins+' 💎')).join('')||'<div class="li me">no supporters yet 🥺</div>';
   $('top-likes').innerHTML=likes.slice(0,5).map((s,i)=>li(i,s,s.likes+' ❤')).join('')||'<div class="li me">tap like to get here</div>';
-  $('results').classList.add('show');
+  $('results').classList.add('show'); sfx.end();
   const t0=performance.now();
   const iv=setInterval(()=>{ const left=Math.ceil((RESULTS_MS-(performance.now()-t0))/1000); $('rs-t').textContent=Math.max(0,left);
     if(left<=0){ clearInterval(iv); $('results').classList.remove('show'); countdown(); } },200);
 }
 function li(i,s,v){ return `<div class="li"><span class="pos">#${i+1}</span><div class="av" style="${s.avatar?`background-image:url('${s.avatar}')`:''}"></div><span>${esc(s.name)}</span><span class="v">${v}</span></div>`; }
 function countdown(){
-  S.phase='countdown'; let n=3; $('cd-n').textContent=n; $('countdown').classList.add('show');
-  const iv=setInterval(()=>{ n--; if(n<=0){ clearInterval(iv); $('countdown').classList.remove('show'); resetRound(); } else $('cd-n').textContent=n; },1000);
+  S.phase='countdown'; let n=3; $('cd-n').textContent=n; $('countdown').classList.add('show'); sfx.tick();
+  const iv=setInterval(()=>{ n--; if(n<=0){ sfx.go(); clearInterval(iv); $('countdown').classList.remove('show'); resetRound(); } else { $('cd-n').textContent=n; sfx.tick(); } },1000);
 }
 function resetRound(){
   S.round++; S.len=START_LEN; S.grow=0; S.eaten=0; S.roundLikes.clear(); S.roundStart=performance.now(); S.lastStep=performance.now();
+  // new random trajectory; re-key apples from old path indices to new ones
+  const cells=[...S.apples].map(([idx,a])=>[path[idx],a]);
+  buildPath(); S.head=0; S.apples.clear();
+  for(const [cell,a] of cells) S.apples.set(idxOf.get(cell.c+','+cell.r),a);
   // apples under the new snake go back to the queue
   const occ=occupied(); for(const [idx,a] of [...S.apples]) if(occ.has(idx)){ S.apples.delete(idx); S.pending.unshift({user:a.user}); }
   S.phase='play';
@@ -405,9 +474,9 @@ function fakeGift(){ const g=rnd([['Rose',1],['Rose',1],['Rose',1],['Finger Hear
   handle({type:'gift',user:fakeUser(),giftName:g[0],diamonds:g[1],count,coins:g[1]*count}); }
 addEventListener('keydown',e=>{ const k=e.key.toLowerCase();
   if(k==='g') fakeGift(); else if(k==='f') handle({type:'follow',user:fakeUser()}); else if(k==='l') handle({type:'like',user:fakeUser(),likes:1+Math.floor(Math.random()*20)});
-  else if(k==='c') handle({type:'chat',user:fakeUser(),text:rnd(['wow','HAH','OMG','🔥🔥🔥','more!'])}); else if(k==='e') endRound(); });
+  else if(k==='c') handle({type:'chat',user:fakeUser(),text:rnd(['wow','HAH','OMG','🔥🔥🔥','more!'])}); else if(k==='b') handle({type:'bomb',user:fakeUser(),giftName:'GG',diamonds:1,count:1+Math.floor(Math.random()*20),coins:1,power:1+Math.floor(Math.random()*20)}); else if(k==='e') endRound(); });
 if(new URLSearchParams(location.search).get('demo')==='1'){
-  (function tick(){ const r=Math.random(); if(r<.35) fakeGift(); else if(r<.5) handle({type:'follow',user:fakeUser()}); else if(r<.85) handle({type:'like',user:fakeUser(),likes:1+Math.floor(Math.random()*20)}); else handle({type:'chat',user:fakeUser(),text:rnd(['wow','HAH','OMG','🔥'])});
+  (function tick(){ const r=Math.random(); if(r<.3) fakeGift(); else if(r<.36) handle({type:'bomb',user:fakeUser(),giftName:'GG',diamonds:1,count:5,coins:5,power:5}); else if(r<.5) handle({type:'follow',user:fakeUser()}); else if(r<.85) handle({type:'like',user:fakeUser(),likes:1+Math.floor(Math.random()*20)}); else handle({type:'chat',user:fakeUser(),text:rnd(['wow','HAH','OMG','🔥'])});
     setTimeout(tick,600+Math.random()*2500); })();
 }
 </script>

@@ -11,6 +11,9 @@ const PORT = Number(process.env.PORT || 3000);
 const USERNAME = (process.argv[2] || process.env.TIKTOK_USER || '').replace(/^@/, '');
 const APPLES_PER_DIAMOND = Number(process.env.APPLES_PER_DIAMOND || 1); // 1 💎 = 1 🍎
 const APPLES_PER_FOLLOW = Number(process.env.APPLES_PER_FOLLOW || 1);
+// Gifts that blow up the snake's tail instead of dropping apples (case-insensitive gift names).
+// Tail loses `diamonds * count` segments.
+const BOMB_GIFTS = (process.env.BOMB_GIFTS || 'GG,Fireworks,Boxing Gloves,Rocket').split(',').map((s) => s.trim().toLowerCase());
 
 const app = express();
 app.use(express.json());
@@ -52,6 +55,9 @@ function addCoins(user, coins) {
 function handleGift(user, giftName, diamonds, count) {
   const coins = Math.max(1, diamonds) * count;
   addCoins(user, coins);
+  if (BOMB_GIFTS.includes(String(giftName).toLowerCase())) {
+    return broadcast({ type: 'bomb', user, giftName, diamonds, count, coins, power: coins });
+  }
   broadcast({
     type: 'gift',
     user,
@@ -81,7 +87,7 @@ wss.on('connection', (ws) => {
       type: 'snapshot',
       supporters: [...supporters.values()],
       tiktok: tiktokStatus,
-      config: { applesPerDiamond: APPLES_PER_DIAMOND, applesPerFollow: APPLES_PER_FOLLOW },
+      config: { applesPerDiamond: APPLES_PER_DIAMOND, applesPerFollow: APPLES_PER_FOLLOW, bombGifts: BOMB_GIFTS },
     })
   );
 });
