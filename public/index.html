@@ -331,7 +331,7 @@ function drawBoard(now){
       for(let j=0;j<=RS;j++){ const idx=i*(RS+1)+j; v.fromBufferAttribute(pos,idx).sub(c).multiplyScalar(.22+.78*k).add(c); pos.setXYZ(idx,v.x,v.y,v.z); } }
     pos.needsUpdate=true; tube.computeVertexNormals(); tailTip.position.copy(curve.getPointAt(0)); }
   snakeMesh.geometry=tube;
-  { const L=curve.getLength(), rp=L/SKIN_PERIOD; skinTex.repeat.set(rp,1); skinTex.offset.set(((-rp+(S.traveled||0)/SKIN_PERIOD)%1+1)%1,0); }
+  { const L=curve.getLength(), rp=L/SKIN_PERIOD; skinTex.repeat.set(rp,1); const T=(S.traveled||0)+t; skinTex.offset.set((((T-L)/SKIN_PERIOD)%1+1)%1,0); }
   const H=S.heat; snakeMat.emissive.setRGB(H*.25,H*.06,0);
   // head + crown + avatar
   const hp=v3[v3.length-1], prev=v3[v3.length-2]||hp; headMesh.position.copy(hp); headMesh.position.y=.5;
