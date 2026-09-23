@@ -815,7 +815,13 @@ const sfx=(()=>{
   const bites=[]; let lastBite=0, bitesLoading=false;
   function loadBites(){ if(bitesLoading) return; bitesLoading=true; const a=ctx();
     [1,2,3,4].forEach((n,i)=>fetch(`sounds/bite${n}.mp3`).then(r=>r.arrayBuffer()).then(b=>a.decodeAudioData(b)).then(buf=>bites[i]=buf).catch(()=>{})); }
-  // only the bite and the follow sounds are used; everything else is silent
+  // only bite, follow and donation sounds are used; everything else is silent
+  // donations: a random meme clip, one at a time (long clips would pile up during gift streaks)
+  const DONATION=['gift-metal','gift-fart','gift-khammam','gift-walter','gift-oioi','gift-burmalda'].map(n=>`sounds/${n}.mp3`);
+  let donationPlaying=null, lastDonation=-1;
+  function playDonation(){ if(donationPlaying&&!donationPlaying.ended&&!donationPlaying.paused) return;
+    let k; do{ k=Math.floor(Math.random()*DONATION.length); } while(DONATION.length>1&&k===lastDonation); lastDonation=k;
+    const a=new Audio(DONATION[k]); a.volume=.85; donationPlaying=a; a.play().catch(()=>{ donationPlaying=null; }); }
   const mute=()=>{};
   return {
     unlock: safe(()=>{ ctx(); loadBites(); }),
@@ -826,10 +832,10 @@ const sfx=(()=>{
       const src=a.createBufferSource(); src.buffer=ready[Math.floor(Math.random()*ready.length)]; src.playbackRate.value=.92+Math.random()*.2;
       const g=a.createGain(); g.gain.value=.9; src.connect(g); g.connect(master); src.start(); }),
     drop: mute,
-    gift: mute,
+    gift: safe(()=>playDonation()),
     like: mute,
     follow: safe(()=>{ const a=new Audio('sounds/follow.mp3'); a.volume=.8; a.onended=()=>{ const b=new Audio('sounds/thanks-obama.mp3'); b.volume=.9; b.play().catch(()=>{}); }; a.play().catch(()=>{}); }),
-    explode: mute,
+    explode: safe(()=>playDonation()),
     tick: mute,
     go: mute,
     end: mute,
