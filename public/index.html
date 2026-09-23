@@ -344,7 +344,8 @@ const sfx=(()=>{
   const safe=fn=>(...x)=>{ try{ fn(...x); }catch(e){} };
   return {
     unlock: safe(()=>ctx()),
-    eat:    safe(()=>{ tone(660,.08,'square',.5,300); }),
+    eat:    safe(()=>{ // crunchy bite: two short noise bursts + a low thump
+      noise(.05,.9,0,2500); tone(180,.06,'triangle',.5,-100); noise(.07,.6,.05,1500); tone(120,.08,'triangle',.4,-60,.05); }),
     drop:   safe(()=>{ tone(220,.12,'triangle',.4,-120); noise(.06,.15,0,800); }),
     gift:   safe(big=>{ [523,659,784,1046].forEach((f,i)=>tone(f,.25,'triangle',.5,0,i*.08)); if(big){ [1046,1318,1568].forEach((f,i)=>tone(f,.5,'sine',.5,0,.4+i*.1)); } }),
     follow: safe(()=>{ tone(880,.15,'sine',.5,0,0); tone(1320,.25,'sine',.5,0,.12); }),
