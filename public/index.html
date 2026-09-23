@@ -246,12 +246,36 @@ const gridTex=(()=>{ const c=document.createElement('canvas'); c.width=COLS*64; 
 const surf=new THREE.Mesh(new THREE.PlaneGeometry(COLS,ROWS),new THREE.MeshStandardMaterial({map:gridTex,roughness:.9,emissive:0xff4400,emissiveIntensity:0}));
 surf.rotation.x=-Math.PI/2; surf.position.y=0.01; surf.receiveShadow=true; scene.add(surf);
 // snake
-const snakeMat=new THREE.MeshStandardMaterial({side:THREE.DoubleSide,color:0x155a78,roughness:.4,metalness:.1,emissive:0x082634,emissiveIntensity:.4});
+// skin texture: scales + dark diamond bands, repeats along the body
+const skinTex=(()=>{ const W=256,H=128,c=document.createElement('canvas'); c.width=W; c.height=H; const g=c.getContext('2d');
+  g.fillStyle='#2aa6d8'; g.fillRect(0,0,W,H);
+  g.fillStyle='#124f78'; for(const cy of [H*.25,H*.75]){ g.beginPath(); g.moveTo(W*.5,cy-H*.22); g.lineTo(W*.85,cy); g.lineTo(W*.5,cy+H*.22); g.lineTo(W*.15,cy); g.closePath(); g.fill(); }
+  g.fillStyle='#9ef0ff'; for(const cy of [H*.25,H*.75]){ g.beginPath(); g.moveTo(W*.5,cy-H*.09); g.lineTo(W*.64,cy); g.lineTo(W*.5,cy+H*.09); g.lineTo(W*.36,cy); g.closePath(); g.fill(); }
+  for(let y=0;y<H;y+=10) for(let x=(y/10%2)*8;x<W;x+=16){ g.strokeStyle='rgba(0,20,40,.28)'; g.lineWidth=1.5; g.beginPath(); g.arc(x,y,8,0,Math.PI); g.stroke();
+    g.fillStyle='rgba(255,255,255,.06)'; g.beginPath(); g.arc(x,y+2,4,0,Math.PI*2); g.fill(); }
+  const t=new THREE.CanvasTexture(c); t.colorSpace=THREE.SRGBColorSpace; t.wrapS=t.wrapT=THREE.RepeatWrapping; t.anisotropy=8; return t; })();
+const SKIN_PERIOD=1.6; // world units per pattern repeat
+const snakeMat=new THREE.MeshPhysicalMaterial({side:THREE.DoubleSide,map:skinTex,bumpMap:skinTex,bumpScale:.6,roughness:.35,metalness:.05,clearcoat:.8,clearcoatRoughness:.3,emissive:0x000000});
 const snakeMesh=new THREE.Mesh(new THREE.BufferGeometry(),snakeMat); snakeMesh.castShadow=true; snakeMesh.receiveShadow=true; scene.add(snakeMesh);
-const tailTip=new THREE.Mesh(new THREE.SphereGeometry(.38*.22,10,8),snakeMat); scene.add(tailTip);
-const headMesh=new THREE.Mesh(new THREE.SphereGeometry(.58,24,20),new THREE.MeshStandardMaterial({color:0x2a8fb0,roughness:.3,emissive:0x0a3040,emissiveIntensity:.6})); headMesh.castShadow=true; scene.add(headMesh);
-const eyeGeo=new THREE.SphereGeometry(.13,10,8), eyeMat=new THREE.MeshStandardMaterial({color:0xffffff}), pupMat=new THREE.MeshStandardMaterial({color:0x000000});
-const eyes=[0,1].map(i=>{ const e=new THREE.Mesh(eyeGeo,eyeMat); const pp=new THREE.Mesh(new THREE.SphereGeometry(.06,8,6),pupMat); pp.position.set(0,0,.1); e.add(pp); headMesh.add(e); e.position.set(i?.25:-.25,.3,.42); return e; });
+const tailTip=new THREE.Mesh(new THREE.SphereGeometry(.38*.22,10,8),new THREE.MeshPhysicalMaterial({color:0x1c86b8,roughness:.35,clearcoat:.8})); scene.add(tailTip);
+// head: elongated, flattened, snout, snake eyes, forked tongue (local +z = forward)
+const headMat=new THREE.MeshPhysicalMaterial({color:0x2aa6d8,roughness:.3,clearcoat:.9,clearcoatRoughness:.25,bumpMap:skinTex,bumpScale:.3});
+const headMesh=new THREE.Group(); scene.add(headMesh);
+const skull=new THREE.Mesh(new THREE.SphereGeometry(.5,28,20),headMat); skull.scale.set(1.05,.72,1.25); skull.castShadow=true; headMesh.add(skull);
+const snout=new THREE.Mesh(new THREE.SphereGeometry(.34,20,14),headMat); snout.scale.set(1.1,.62,1.1); snout.position.set(0,-.05,.42); snout.castShadow=true; headMesh.add(snout);
+const topMark=new THREE.Mesh(new THREE.SphereGeometry(.2,14,10),new THREE.MeshPhysicalMaterial({color:0x0b3d5e,roughness:.4,clearcoat:.8})); topMark.scale.set(1,.3,1.6); topMark.position.set(0,.33,-.05); headMesh.add(topMark);
+for(const sx of [-1,1]){ const n=new THREE.Mesh(new THREE.SphereGeometry(.035,8,6),new THREE.MeshBasicMaterial({color:0x04121a})); n.position.set(sx*.1,.1,.74); headMesh.add(n); }
+const eyeMat=new THREE.MeshPhysicalMaterial({color:0xffd23f,roughness:.1,clearcoat:1,emissive:0x553300,emissiveIntensity:.4}), pupMat=new THREE.MeshBasicMaterial({color:0x000000});
+const eyes=[-1,1].map(sx=>{ const e=new THREE.Group(); const ball=new THREE.Mesh(new THREE.SphereGeometry(.14,16,12),eyeMat); e.add(ball);
+  const slit=new THREE.Mesh(new THREE.SphereGeometry(.14,12,10),pupMat); slit.scale.set(.18,.85,.3); slit.position.set(0,0,.1); e.add(slit);
+  const glint=new THREE.Mesh(new THREE.SphereGeometry(.03,6,5),new THREE.MeshBasicMaterial({color:0xffffff})); glint.position.set(sx*.03,.06,.13); e.add(glint);
+  const lid=new THREE.Mesh(new THREE.SphereGeometry(.155,14,10,0,Math.PI*2,0,Math.PI/2),headMat); lid.scale.y=.05; e.add(lid); e.userData.lid=lid;
+  e.position.set(sx*.3,.2,.28); e.rotation.y=sx*.5; headMesh.add(e); return e; });
+const tongue=new THREE.Group(); const tongueMat=new THREE.MeshStandardMaterial({color:0xe0245e,roughness:.5});
+{ const base=new THREE.Mesh(new THREE.CylinderGeometry(.025,.025,.35,6),tongueMat); base.rotation.x=Math.PI/2; base.position.z=.175; tongue.add(base);
+  for(const sx of [-1,1]){ const f=new THREE.Mesh(new THREE.CylinderGeometry(.018,.01,.16,6),tongueMat); f.rotation.x=Math.PI/2; f.rotation.y=sx*.45; f.position.set(sx*.035,0,.4); tongue.add(f); } }
+tongue.position.set(0,-.1,.6); headMesh.add(tongue);
+let headYaw=0;
 function spriteFromCanvas(draw,w,h,scale){ const c=document.createElement('canvas'); c.width=w; c.height=h; draw(c.getContext('2d'),w,h);
   const t=new THREE.CanvasTexture(c); t.colorSpace=THREE.SRGBColorSpace; const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:t,transparent:true,depthTest:false})); sp.scale.set(scale*w/h,scale,1); return sp; }
 const crown=spriteFromCanvas((g,w,h)=>{ g.font='100px serif'; g.textAlign='center'; g.textBaseline='middle'; g.fillText('👑',w/2,h/2); },128,128,.9); scene.add(crown);
@@ -261,7 +285,7 @@ function updateAvatar(ts){
   const im=ts&&img(ts.avatar); if(ts&&ts.avatar&&!im) return; // wait for image
   avatarFor=key; if(avatarSprite){ scene.remove(avatarSprite); avatarSprite=null; } if(nameSprite){ scene.remove(nameSprite); nameSprite=null; }
   if(!ts) return;
-  if(im) avatarSprite=spriteFromCanvas((g,w,h)=>{ g.beginPath(); g.arc(w/2,h/2,w/2-6,0,7); g.fillStyle='#ffd166'; g.fill(); g.save(); g.beginPath(); g.arc(w/2,h/2,w/2-12,0,7); g.clip(); g.drawImage(im,12,12,w-24,h-24); g.restore(); },128,128,1.15);
+  if(im) avatarSprite=spriteFromCanvas((g,w,h)=>{ g.beginPath(); g.arc(w/2,h/2,w/2-6,0,7); g.fillStyle='#ffd166'; g.fill(); g.save(); g.beginPath(); g.arc(w/2,h/2,w/2-12,0,7); g.clip(); g.drawImage(im,12,12,w-24,h-24); g.restore(); },128,128,.95);
   nameSprite=spriteFromCanvas((g,w,h)=>{ g.font='bold 44px Rajdhani, sans-serif'; g.textAlign='center'; g.textBaseline='middle'; g.lineWidth=8; g.strokeStyle='rgba(0,0,0,.75)'; g.strokeText(ts.name,w/2,h/2); g.fillStyle='#ffd166'; g.fillText(ts.name,w/2,h/2); },512,80,.7);
   if(avatarSprite) scene.add(avatarSprite); scene.add(nameSprite);
 }
@@ -307,13 +331,17 @@ function drawBoard(now){
       for(let j=0;j<=RS;j++){ const idx=i*(RS+1)+j; v.fromBufferAttribute(pos,idx).sub(c).multiplyScalar(.22+.78*k).add(c); pos.setXYZ(idx,v.x,v.y,v.z); } }
     pos.needsUpdate=true; tube.computeVertexNormals(); tailTip.position.copy(curve.getPointAt(0)); }
   snakeMesh.geometry=tube;
-  const H=S.heat; snakeMat.color.setRGB(.05,.45,.72); snakeMat.emissive.setRGB(lerp(.03,.25,H),lerp(.15,.08,H),lerp(.2,.05,H));
+  { const L=curve.getLength(), rp=L/SKIN_PERIOD; skinTex.repeat.set(rp,1); skinTex.offset.set(((-rp+(S.traveled||0)/SKIN_PERIOD)%1+1)%1,0); }
+  const H=S.heat; snakeMat.emissive.setRGB(H*.25,H*.06,0);
   // head + crown + avatar
   const hp=v3[v3.length-1], prev=v3[v3.length-2]||hp; headMesh.position.copy(hp); headMesh.position.y=.5;
-  tmpP.copy(hp).sub(prev); if(tmpP.lengthSq()>1e-6) headMesh.rotation.y=Math.atan2(tmpP.x,tmpP.z);
-  crown.position.set(hp.x,1.55,hp.z);
+  tmpP.copy(hp).sub(prev); if(tmpP.lengthSq()>1e-6){ const target=Math.atan2(tmpP.x,tmpP.z); let d=target-headYaw; d=Math.atan2(Math.sin(d),Math.cos(d)); headYaw+=d*Math.min(1,dt*14); }
+  headMesh.rotation.y=headYaw; headMesh.position.y=.48+Math.sin(now/180)*.025; headMesh.rotation.z=Math.sin(now/260)*.05;
+  { const bl=(now%3700)<120; for(const e of eyes) e.userData.lid.scale.y=bl?1:.05; }
+  { const ph=(now%2300)/2300; const out=ph<.18?Math.sin(ph/.18*Math.PI):0; tongue.scale.set(1,1,Math.max(.001,out)); tongue.visible=out>.02; tongue.rotation.x=Math.sin(now/35)*.25*out; }
+  crown.position.set(hp.x,2.45,hp.z);
   const ts=topSupporter(); updateAvatar(ts);
-  if(avatarSprite) avatarSprite.position.set(hp.x,1.05,hp.z-.05); if(nameSprite) nameSprite.position.set(hp.x,-.15,hp.z+.75);
+  if(avatarSprite) avatarSprite.position.set(hp.x,1.85,hp.z-.05); if(nameSprite) nameSprite.position.set(hp.x,-.15,hp.z+.75);
   tmpV.copy(hp).project(camera); headScreen.x=(tmpV.x+1)/2*1080; headScreen.y=(1-tmpV.y)/2*1920;
   // apples: bouncy drop + squash on landing, idle bob/spin, pop when eaten
   let i=0; const E=new THREE.Euler(), lq=new THREE.Quaternion(), leafOff=new THREE.Vector3();
@@ -364,6 +392,7 @@ function drawBoard(now){
   camera.position.copy(CAM_POS); camera.lookAt(CAM_LOOK);
   if(sh){ camera.position.x+=(Math.random()-.5)*sh*1.2; camera.position.y+=(Math.random()-.5)*sh*1.2; }
   renderer.render(scene,camera);
+
 }
 function spawnBurst(p,n,cols,speed){ const now=performance.now(); for(let i=0;i<n;i++){ const c=cols[Math.floor(Math.random()*cols.length)];
   S.particles.push({x:cx(p),y:.5,z:cy(p),vx:(Math.random()-.5)*speed,vy:Math.random()*speed*.8+1,vz:(Math.random()-.5)*speed,t:now,col:hexToRgb(c)}); } }
@@ -371,7 +400,7 @@ function spawnBurst(p,n,cols,speed){ const now=performance.now(); for(let i=0;i<
 // ---------- game step ----------
 function step(now){
   const next=(S.head+1)%N;
-  S.head=next;
+  S.head=next; S.traveled=(S.traveled||0)+1;
   if(S.grow>0){ S.grow--; S.len++; }
   if(S.apples.has(next)){
     const a=S.apples.get(next); S.apples.delete(next); (S.popping=S.popping||[]).push({idx:next,t:now}); S.grow++; S.eaten++; S.eatenTotal++;
