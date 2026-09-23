@@ -26,6 +26,20 @@ Without a username the game runs in demo mode: **G** gift, **F** follow, **L** l
 Board size (`COLS`/`ROWS`), round length (`ROUND_MS`) and speed (`STEP_MS_*`) are
 constants at the top of the script in `public/index.html`.
 
+## Thank every follower in the LIVE chat
+The server can post a message into your TikTok LIVE chat on every follow. TikTok requires an
+authenticated session for that, so set:
+- `TIKTOK_SESSION_ID` and `TIKTOK_TARGET_IDC` — your account's `sessionid` and `tt-target-idc` cookies
+  (log into tiktok.com in a browser, copy them from DevTools → Application → Cookies; keep them secret)
+- `EULER_API_KEY` — a sign API key from https://www.eulerstream.com (required by the library for sending)
+- `FOLLOW_CHAT_MSG` — optional template, default `Thanks for the follow, @{name}! 🍎 +1 apple for the snake`
+  (`{name}` = username, `{nickname}` = display name); `CHAT_MIN_GAP_MS=3000` spaces messages out
+
+```bash
+TIKTOK_SESSION_ID=... TIKTOK_TARGET_IDC=useast1a EULER_API_KEY=... node server.js your_handle
+```
+Without these variables the game still works; follows are only shown in the on-screen feed.
+
 ## Simulate events via API
 ```bash
 curl -X POST localhost:3000/api/sim -H 'content-type: application/json' \

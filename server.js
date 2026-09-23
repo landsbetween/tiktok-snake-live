@@ -13,6 +13,32 @@ const APPLES_PER_DIAMOND = Number(process.env.APPLES_PER_DIAMOND || 1); // 1 �
 const APPLES_PER_FOLLOW = Number(process.env.APPLES_PER_FOLLOW || 1);
 // Gifts that blow up the snake's tail instead of dropping apples (case-insensitive gift names).
 // Tail loses `diamonds * count` segments.
+// Posting into the TikTok LIVE chat (thanks for every follow). Needs your account's
+// `sessionid` + `tt-target-idc` cookies and a Euler Stream sign API key (https://www.eulerstream.com).
+const CHAT = {
+  sessionId: process.env.TIKTOK_SESSION_ID || '',
+  targetIdc: process.env.TIKTOK_TARGET_IDC || '',
+  signApiKey: process.env.EULER_API_KEY || '',
+  followMsg: process.env.FOLLOW_CHAT_MSG || 'Thanks for the follow, @{name}! 🍎 +1 apple for the snake',
+  minGapMs: Number(process.env.CHAT_MIN_GAP_MS || 3000), // spam guard between messages
+};
+const chatEnabled = !!(CHAT.sessionId && CHAT.targetIdc && CHAT.signApiKey);
+let chatConn = null; const chatQueue = []; let chatBusy = false;
+function chatSay(text) {
+  if (!chatEnabled || !chatConn) return;
+  chatQueue.push(text); if (chatQueue.length > 20) chatQueue.shift();
+  if (chatBusy) return;
+  chatBusy = true;
+  (async () => {
+    while (chatQueue.length) {
+      const msg = chatQueue.shift();
+      try { await chatConn.sendMessage(msg); console.log('💬 chat:', msg); }
+      catch (e) { console.error('💬 chat send failed:', e?.message || e); }
+      await new Promise((r) => setTimeout(r, CHAT.minGapMs));
+    }
+    chatBusy = false;
+  })();
+}
 const BOMB_GIFTS = (process.env.BOMB_GIFTS || 'GG,Fireworks,Boxing Gloves,Rocket').split(',').map((s) => s.trim().toLowerCase());
 
 const app = express();
@@ -70,6 +96,7 @@ function handleGift(user, giftName, diamonds, count) {
 }
 function handleFollow(user) {
   broadcast({ type: 'follow', user, apples: APPLES_PER_FOLLOW });
+  chatSay(CHAT.followMsg.replace('{name}', user.id).replace('{nickname}', user.name));
 }
 function handleLike(user, likes) {
   broadcast({ type: 'like', user, likes });
@@ -116,7 +143,13 @@ async function connectTikTok() {
     processInitialData: false,
     enableExtendedGiftInfo: true,
     fetchRoomInfoOnConnect: true,
+    ...(chatEnabled
+      ? { signApiKey: CHAT.signApiKey, authenticateWs: true,
+          session: { cookie: { type: 'cookie', value: { sessionId: CHAT.sessionId, ttTargetIdc: CHAT.targetIdc } } } }
+      : {}),
   });
+  chatConn = conn;
+  console.log(chatEnabled ? '💬 Chat replies enabled: every follow gets a thank-you message' : 'ℹ️  Chat replies off (set TIKTOK_SESSION_ID, TIKTOK_TARGET_IDC, EULER_API_KEY to enable)');
 
   conn.on(WebcastEvent.GIFT, (d) => {
     // Streakable gifts (giftType 1) are counted once the streak ends
