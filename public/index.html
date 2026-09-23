@@ -185,7 +185,7 @@ function freeCells(){ const occ=occupied(); const f=[]; for(let i=0;i<N;i++) if(
 function dropApples(n,user){ for(let i=0;i<n;i++) S.pending.push({user}); }
 // Apples spawn on the path ahead of the head, 1-4 seconds of travel away.
 const SPAWN_AHEAD_MIN_S=1, SPAWN_AHEAD_MAX_S=4;
-const LIKES_PER_APPLE=50;            // every 50 likes drop one apple
+const LIKES_PER_APPLE=10;            // every 10 likes drop one fruit
 const FIRE_START=40, FIRE_MAX=400;   // likes per minute: where the fire starts / is at full blast
 function drainPending(){
   if(!S.pending.length) return;
