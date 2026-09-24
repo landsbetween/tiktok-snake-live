@@ -59,8 +59,8 @@ function broadcast(msg) {
 
 function userInfo(u = {}) {
   return {
-    id: u.uniqueId || u.userId || 'anon',
-    name: u.nickname || u.uniqueId || 'Anonymous',
+    id: u.uniqueId || u.displayId || u.userId || u.id || 'anon',
+    name: u.nickname || u.uniqueId || u.displayId || 'Anonymous',
     avatar:
       u.profilePicture?.url?.[0] ||
       u.profilePicture?.urls?.[0] ||
@@ -167,7 +167,7 @@ async function connectTikTok() {
     handleGift(userInfo(d.user), name, Number(diamonds), count);
   });
   conn.on(WebcastEvent.FOLLOW, (d) => handleFollow(userInfo(d.user)));
-  conn.on(WebcastEvent.LIKE, (d) => handleLike(userInfo(d.user), Number(d.likeCount || 1)));
+  conn.on(WebcastEvent.LIKE, (d) => handleLike(userInfo(d.user), Number(d.count ?? d.likeCount ?? 1)));
   conn.on(WebcastEvent.CHAT, (d) => handleChat(userInfo(d.user), d.comment || ''));
   conn.on(WebcastEvent.MEMBER, (d) => handleJoin(userInfo(d.user)));
   conn.on(WebcastEvent.STREAM_END, () => {
