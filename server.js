@@ -158,11 +158,11 @@ async function connectTikTok() {
 
   conn.on(WebcastEvent.GIFT, (d) => {
     // Streakable gifts (giftType 1) are counted once the streak ends
-    const giftType = d.giftDetails?.giftType ?? d.giftType;
+    const giftType = d.gift?.type ?? d.giftDetails?.giftType ?? d.giftType;
     if (giftType === 1 && !d.repeatEnd) return;
     const diamonds =
-      d.diamondCount ?? d.giftDetails?.diamondCount ?? d.extendedGiftInfo?.diamond_count ?? 1;
-    const name = d.giftDetails?.giftName ?? d.giftName ?? d.extendedGiftInfo?.name ?? 'Gift';
+      d.gift?.diamondCount ?? d.diamondCount ?? d.giftDetails?.diamondCount ?? d.extendedGiftInfo?.diamond_count ?? 1;
+    const name = d.gift?.name ?? d.giftDetails?.giftName ?? d.giftName ?? d.extendedGiftInfo?.name ?? 'Gift';
     const count = Number(d.repeatCount || 1);
     handleGift(userInfo(d.user), name, Number(diamonds), count);
   });
